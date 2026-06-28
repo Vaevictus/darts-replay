@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+var/
+*.log
+.DS_Store
+
+# Runtime config (copy config.example.json -> config.json and edit locally)
+config.json

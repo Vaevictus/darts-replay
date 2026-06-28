@@ -1,0 +1,71 @@
+{
+  "name": "darts-replay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Instant-replay system for an Autodarts board: records each visit on a spare webcam, auto-plays it, and pairs it with an SVG of what was hit.",
+  "keywords": [
+    "darts",
+    "autodarts",
+    "instant-replay",
+    "dartboard",
+    "replay",
+    "ffmpeg",
+    "webcam",
+    "v4l2"
+  ],
+  "homepage": "https://github.com/Vaevictus/darts-replay#readme",
+  "bugs": {
+    "url": "https://github.com/Vaevictus/darts-replay/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vaevictus/darts-replay.git"
+  },
+  "license": "MIT",
+  "author": "Craig Whitcombe",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts",
+    "start": "tsx server/src/index.ts",
+    "probe": "tsx tools/log-events.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.4",
+    "@fastify/websocket": "^11.0.2",
+    "fastify": "^5.2.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.21.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.4"
+  }
+}
