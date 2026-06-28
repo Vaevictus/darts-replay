@@ -1,4 +1,6 @@
-import type { Config, Visit } from "@shared/types.js";
+import type { Camera, Config, Visit } from "@shared/types.js";
+
+export type { Camera, CameraFormat, CameraSize } from "@shared/types.js";
 
 export type VisitPatch = Partial<Pick<Visit, "saved" | "rating" | "note">>;
 
@@ -39,23 +41,6 @@ export async function putConfig(patch: ConfigPatch): Promise<Config> {
     throw new Error(body.details?.join("; ") ?? `config save failed: ${res.status}`);
   }
   return ((await res.json()) as { config: Config }).config;
-}
-
-export interface CameraSize {
-  w: number;
-  h: number;
-  fps: number[];
-}
-export interface CameraFormat {
-  fourcc: string;
-  label: string;
-  normalized: "h264" | "mjpeg" | "yuyv422" | null;
-  sizes: CameraSize[];
-}
-export interface Camera {
-  path: string;
-  name: string;
-  caps: CameraFormat[];
 }
 
 export async function getCameras(): Promise<Camera[]> {

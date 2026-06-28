@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { RINGS } from "@shared/dartboard.js";
 
 export type HeatmapMode = "glow" | "ramp";
@@ -15,8 +15,11 @@ interface Pt {
   y: number;
 }
 
-/** 256-entry blue→cyan→green→yellow→red lookup for the ramp colorizer. */
-function buildPalette(): Uint8ClampedArray {
+/** 256-entry blue→cyan→green→yellow→red lookup for the ramp colorizer. Built once
+ * (the palette is constant), lazily so it isn't created until a ramp render needs it. */
+let paletteCache: Uint8ClampedArray | null = null;
+function palette(): Uint8ClampedArray {
+  if (paletteCache) return paletteCache;
   const cv = document.createElement("canvas");
   cv.width = 256;
   cv.height = 1;
@@ -29,7 +32,8 @@ function buildPalette(): Uint8ClampedArray {
   g.addColorStop(1.0, "#e02020");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 256, 1);
-  return ctx.getImageData(0, 0, 256, 1).data;
+  paletteCache = ctx.getImageData(0, 0, 256, 1).data;
+  return paletteCache;
 }
 
 /**
@@ -51,7 +55,6 @@ export function Heatmap({
   size?: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const palette = useMemo(buildPalette, []);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -127,23 +130,29 @@ export function Heatmap({
     }
     const img = hctx.getImageData(0, 0, px, px);
     const d = img.data;
-    let maxA = 0;
-    for (let i = 3; i < d.length; i += 4) if (d[i] > maxA) maxA = d[i];
-    if (maxA === 0) return;
-    const denom = scale === "relative" ? maxA : ABSOLUTE_REF;
+    // Relative scaling needs the densest alpha; absolute uses a fixed reference and
+    // skips the scan. There's always at least one blob here (coords non-empty).
+    let denom = ABSOLUTE_REF;
+    if (scale === "relative") {
+      let maxA = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > maxA) maxA = d[i];
+      if (maxA === 0) return;
+      denom = maxA;
+    }
+    const pal = palette();
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (!a) continue;
       const t = Math.min(1, a / denom); // density, relative-to-max or absolute
       const j = Math.min(255, Math.round(t * 255)) * 4;
-      d[i] = palette[j];
-      d[i + 1] = palette[j + 1];
-      d[i + 2] = palette[j + 2];
+      d[i] = pal[j];
+      d[i + 1] = pal[j + 1];
+      d[i + 2] = pal[j + 2];
       d[i + 3] = Math.round(t * 215);
     }
     hctx.putImageData(img, 0, 0);
     ctx.drawImage(heat, 0, 0);
-  }, [coords, mode, scale, size, palette]);
+  }, [coords, mode, scale, size]);
 
   return <canvas ref={ref} className="heatmap__canvas" style={{ width: size, height: size }} />;
 }

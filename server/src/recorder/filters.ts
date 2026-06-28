@@ -30,12 +30,16 @@ export function orientationChain(webcam: Config["webcam"]): string[] {
   return chain;
 }
 
+/** Wrap a filter chain as ffmpeg `-vf` args, or [] when there's nothing to apply. */
+export function vfArgs(chain: string[]): string[] {
+  return chain.length ? ["-vf", chain.join(",")] : [];
+}
+
 /**
  * Recording filter args: either [] (no orientation change, or encoder can't filter)
  * or ["-vf", "<comma-joined chain>"]. "copy" can't filter, so it gets [].
  */
 export function videoFilters(webcam: Config["webcam"]): string[] {
   if (webcam.encoder === "copy") return [];
-  const chain = orientationChain(webcam);
-  return chain.length ? ["-vf", chain.join(",")] : [];
+  return vfArgs(orientationChain(webcam));
 }

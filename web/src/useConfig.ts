@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Config, Visit } from "@shared/types.js";
 import type { HeatmapMode, HeatmapScale } from "./Heatmap.js";
+import { usePersistedState } from "./hooks.js";
 import { getConfig, putConfig } from "./api.js";
 
 const HEAT_MODE_KEY = "darts-replay.heatmapMode";
@@ -8,37 +9,17 @@ const HEAT_SCALE_KEY = "darts-replay.heatmapScale";
 const HEAT_STORE_KEY = "darts-replay.heatmapStore";
 
 /** Heatmap color style (blue→red ramp vs orange glow), persisted in localStorage. */
-export function useHeatmapMode(): [HeatmapMode, (m: HeatmapMode) => void] {
-  const [mode, setMode] = useState<HeatmapMode>(() => {
-    const raw = localStorage.getItem(HEAT_MODE_KEY);
-    return raw === "glow" || raw === "ramp" ? raw : "ramp";
-  });
-  const set = useCallback((m: HeatmapMode) => {
-    setMode(m);
-    try {
-      localStorage.setItem(HEAT_MODE_KEY, m);
-    } catch {
-      /* storage may be unavailable */
-    }
-  }, []);
-  return [mode, set];
+export function useHeatmapMode() {
+  return usePersistedState<HeatmapMode>(HEAT_MODE_KEY, "ramp", (raw) =>
+    raw === "glow" || raw === "ramp" ? raw : "ramp",
+  );
 }
 
 /** Heatmap intensity scale (relative-to-densest vs absolute), persisted. */
-export function useHeatmapScale(): [HeatmapScale, (s: HeatmapScale) => void] {
-  const [scale, setScale] = useState<HeatmapScale>(() => {
-    const raw = localStorage.getItem(HEAT_SCALE_KEY);
-    return raw === "relative" || raw === "absolute" ? raw : "relative";
-  });
-  const set = useCallback((s: HeatmapScale) => {
-    setScale(s);
-    try {
-      localStorage.setItem(HEAT_SCALE_KEY, s);
-    } catch {
-      /* storage may be unavailable */
-    }
-  }, []);
-  return [scale, set];
+export function useHeatmapScale() {
+  return usePersistedState<HeatmapScale>(HEAT_SCALE_KEY, "relative", (raw) =>
+    raw === "relative" || raw === "absolute" ? raw : "relative",
+  );
 }
 
 type Coord = { x: number; y: number };
@@ -127,21 +108,11 @@ const DEFAULT_SYNC_OFFSET = 600; // ms to delay impact reveals (video pipeline l
 
 /** How long (ms) to delay synced dart-impact reveals so markers match the video.
  * A setup-specific constant (recording latency), persisted in localStorage. */
-export function useSyncOffset(): [number, (ms: number) => void] {
-  const [offset, setOffset] = useState(() => {
-    const raw = localStorage.getItem(SYNC_KEY);
-    const n = raw === null ? NaN : Number(raw);
+export function useSyncOffset() {
+  return usePersistedState<number>(SYNC_KEY, DEFAULT_SYNC_OFFSET, (raw) => {
+    const n = Number(raw);
     return Number.isFinite(n) ? n : DEFAULT_SYNC_OFFSET;
   });
-  const set = useCallback((ms: number) => {
-    setOffset(ms);
-    try {
-      localStorage.setItem(SYNC_KEY, String(ms));
-    } catch {
-      /* storage may be unavailable */
-    }
-  }, []);
-  return [offset, set];
 }
 
 /** Fetch the capture fps once (for frame-accurate stepping). Defaults to 30. */

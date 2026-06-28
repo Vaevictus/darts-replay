@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Visit, Config } from "@shared/types.js";
 import { Dartboard } from "./Dartboard.js";
 import { Overlay, type OverlayConfig } from "./Overlay.js";
-import { BoardOverlay, revealedCount } from "./BoardOverlay.js";
+import { BoardOverlay, revealedCount, hasImpactTiming } from "./BoardOverlay.js";
 import { useVideoController, SPEEDS, formatTime } from "./useVideoController.js";
 import { patchVisit } from "./api.js";
 
@@ -38,7 +38,7 @@ export function ReplayPlayer({
   // only rebuilds when a dart actually lands, not on every time tick.
   const shownCount = revealedCount(visit.darts, visit.clipStartMs, ctrl.time, syncOffsetMs);
   const shownDarts = useMemo(() => visit.darts.slice(0, shownCount), [visit.darts, shownCount]);
-  const synced = visit.clipStartMs != null && visit.darts.every((d) => typeof d.at === "number");
+  const synced = hasImpactTiming(visit.darts, visit.clipStartMs);
 
   // When the selected clip changes, force the <video> to load the new source and
   // (if auto-playing) start it. Swapping a video's src alone doesn't reliably

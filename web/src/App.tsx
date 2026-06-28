@@ -6,6 +6,7 @@ import { CompareView } from "./CompareView.js";
 import { Settings } from "./Settings.js";
 import { BoardActions } from "./BoardActions.js";
 import { Heatmap } from "./Heatmap.js";
+import { useConfirm } from "./hooks.js";
 import {
   useFps,
   useBoardCalibration,
@@ -67,7 +68,7 @@ export function App() {
   const [heatmapOpen, setHeatmapOpen] = useState(true);
   const [heatMode, setHeatMode] = useHeatmapMode();
   const [heatScale, setHeatScale] = useHeatmapScale();
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetArmed, triggerReset] = useConfirm();
   const { coords: storeCoords, ingest: ingestHeat, reset: resetHeat } = useHeatmapStore();
 
   // The heatmap draws from its own accumulating store (survives visit pruning),
@@ -198,18 +199,10 @@ export function App() {
               )}
               <button
                 className="heatmap__reset"
-                onClick={() => {
-                  if (!confirmReset) {
-                    setConfirmReset(true);
-                    setTimeout(() => setConfirmReset(false), 3000);
-                    return;
-                  }
-                  setConfirmReset(false);
-                  resetHeat();
-                }}
+                onClick={() => triggerReset(resetHeat)}
                 title="Clear the accumulated heatmap data"
               >
-                {confirmReset ? "Confirm reset?" : "↺ Reset data"}
+                {resetArmed ? "Confirm reset?" : "↺ Reset data"}
               </button>
             </div>
           </>

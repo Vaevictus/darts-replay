@@ -7,15 +7,16 @@ import type { Config } from "@shared/types.js";
 const WS_OPEN = 1; // WebSocket.OPEN
 import { Engine, type ServerMessage } from "./engine.js";
 import { VisitStore, validateVisitPatch } from "./store/visits.js";
-import { resolvePath, saveConfig, validateConfigPatch } from "./config.js";
+import { resolvePath, saveConfig, validateConfigPatch, WEBCAM_FORMATS, ROTATIONS } from "./config.js";
 import { listCameras } from "./cameras.js";
+import { fetchWithTimeout } from "./fetch.js";
 import type { WebcamOverride } from "./recorder/preview.js";
 import { logger } from "./log.js";
 
 const log = logger("ws");
 
-const STREAM_FORMATS = new Set(["h264", "mjpeg", "yuyv422"]);
-const STREAM_ROTATIONS = new Set([0, 90, 180, 270]);
+const STREAM_FORMATS = new Set<unknown>(WEBCAM_FORMATS);
+const STREAM_ROTATIONS = new Set<unknown>(ROTATIONS);
 
 // Board Manager control endpoints (POST, empty body), captured from the local
 // :3180 UI. `reset` re-arms the board to the throw-ready state; `calibrate` kicks
@@ -28,15 +29,11 @@ const BOARD_COMMANDS: Record<string, string> = {
 /** POST a command to the autodarts Board Manager. Returns a small result object
  * (never throws) so the route can relay success/failure to the UI. */
 async function postToBoard(host: string, port: number, path: string): Promise<{ ok: boolean; error?: string }> {
-  const ac = new AbortController();
-  const to = setTimeout(() => ac.abort(), 5000);
   try {
-    const res = await fetch(`http://${host}:${port}${path}`, { method: "POST", signal: ac.signal });
+    const res = await fetchWithTimeout(`http://${host}:${port}${path}`, 5000, { method: "POST" });
     return res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "unreachable" };
-  } finally {
-    clearTimeout(to);
   }
 }
 
@@ -168,17 +165,13 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
   app.post<{ Body: { host?: unknown; port?: unknown } }>("/api/board/test", async (req, reply) => {
     const host = typeof req.body?.host === "string" && req.body.host ? req.body.host : cfg.board.host;
     const port = Number.isInteger(req.body?.port) ? (req.body!.port as number) : cfg.board.port;
-    const ac = new AbortController();
-    const to = setTimeout(() => ac.abort(), 2000);
     try {
-      const res = await fetch(`http://${host}:${port}/api/state`, { signal: ac.signal });
+      const res = await fetchWithTimeout(`http://${host}:${port}/api/state`, 2000);
       if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
       const body = (await res.json()) as { status?: unknown; connected?: unknown };
       return { ok: true, status: typeof body.status === "string" ? body.status : "reachable", connected: body.connected === true };
     } catch (err) {
       return reply.code(200).send({ ok: false, error: err instanceof Error ? err.message : "unreachable" });
-    } finally {
-      clearTimeout(to);
     }
   });
 

@@ -61,9 +61,9 @@ export function merge(base: Config, over: ConfigPatch): Config {
   };
 }
 
-const WEBCAM_FORMATS = ["h264", "mjpeg", "yuyv422"] as const;
+export const WEBCAM_FORMATS = ["h264", "mjpeg", "yuyv422"] as const;
 const ENCODERS = ["copy", "x264", "vaapi"] as const;
-const ROTATIONS = [0, 90, 180, 270] as const;
+export const ROTATIONS = [0, 90, 180, 270] as const;
 
 type Rec = Record<string, unknown>;
 const isObj = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);

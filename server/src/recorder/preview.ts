@@ -11,7 +11,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import type { ServerResponse } from "node:http";
 import type { Config } from "@shared/types.js";
 import type { RingBuffer } from "./ring-buffer.js";
-import { orientationChain } from "./filters.js";
+import { orientationChain, vfArgs } from "./filters.js";
 import { logger } from "../log.js";
 
 /** A subset of webcam settings the preview may override per-stream, so the live
@@ -155,7 +155,7 @@ export class CameraPreview {
       String(webcam.fps),
       "-i",
       webcam.device,
-      ...(chain.length ? ["-vf", chain.join(",")] : []),
+      ...vfArgs(chain),
       "-r",
       String(PREVIEW_FPS),
       "-f",

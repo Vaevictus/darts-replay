@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Status } from "./useReplay.js";
 import { boardCommand, type BoardCommand } from "./api.js";
+import { useConfirm } from "./hooks.js";
 
 /**
  * Quick Board-Manager actions in the topbar, mirroring the autodarts Play UI:
@@ -10,17 +11,10 @@ import { boardCommand, type BoardCommand } from "./api.js";
 export function BoardActions({ status }: { status: Status }) {
   const [busy, setBusy] = useState<BoardCommand | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [confirmCal, setConfirmCal] = useState(false);
+  const [calArmed, triggerCal] = useConfirm();
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const confirmTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(
-    () => () => {
-      clearTimeout(flashTimer.current);
-      clearTimeout(confirmTimer.current);
-    },
-    [],
-  );
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   const flash = (ok: boolean, text: string) => {
     setMsg({ ok, text });
@@ -35,18 +29,6 @@ export function BoardActions({ status }: { status: Status }) {
     setBusy(null);
   }, []);
 
-  const onCalibrate = () => {
-    if (!confirmCal) {
-      setConfirmCal(true);
-      clearTimeout(confirmTimer.current);
-      confirmTimer.current = setTimeout(() => setConfirmCal(false), 3000);
-      return;
-    }
-    setConfirmCal(false);
-    clearTimeout(confirmTimer.current);
-    void run("calibrate");
-  };
-
   const disabled = busy !== null || !status.connected;
 
   return (
@@ -59,12 +41,12 @@ export function BoardActions({ status }: { status: Status }) {
         {busy === "reset" ? "Resetting…" : "↺ Reset"}
       </button>
       <button
-        className={confirmCal ? "warn" : ""}
-        onClick={onCalibrate}
+        className={calArmed ? "warn" : ""}
+        onClick={() => triggerCal(() => void run("calibrate"))}
         disabled={disabled}
         title="Run camera auto-calibration"
       >
-        {busy === "calibrate" ? "Calibrating…" : confirmCal ? "Confirm calibrate?" : "🎯 Calibrate"}
+        {busy === "calibrate" ? "Calibrating…" : calArmed ? "Confirm calibrate?" : "🎯 Calibrate"}
       </button>
       {msg && <span className={`boardbar__msg ${msg.ok ? "ok" : "bad"}`}>{msg.text}</span>}
     </div>

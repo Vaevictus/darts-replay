@@ -103,3 +103,21 @@ export interface Config {
     };
   };
 }
+
+/** A V4L2 camera and its capabilities, as returned by GET /api/cameras. */
+export interface CameraSize {
+  w: number;
+  h: number;
+  fps: number[]; // discrete framerates, highest first
+}
+export interface CameraFormat {
+  fourcc: string; // e.g. "MJPG"
+  label: string; // e.g. "Motion-JPEG, compressed"
+  normalized: "h264" | "mjpeg" | "yuyv422" | null; // maps to Config.webcam.format
+  sizes: CameraSize[];
+}
+export interface Camera {
+  path: string; // /dev/videoN
+  name: string;
+  caps: CameraFormat[];
+}

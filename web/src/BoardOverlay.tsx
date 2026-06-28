@@ -14,6 +14,11 @@ const OVERLAY_MARKER_RADIUS = 0.085;
 const FULL_OPTS: BoardOptions = { showNumbers: true, markerRadius: OVERLAY_MARKER_RADIUS };
 const WIRE_OPTS: BoardOptions = { wireframe: true, showNumbers: true, markerRadius: OVERLAY_MARKER_RADIUS };
 
+/** Whether a clip has the per-dart timestamps + clip start needed to sync impacts. */
+export function hasImpactTiming(darts: Dart[], clipStartMs: number | undefined): clipStartMs is number {
+  return clipStartMs != null && darts.every((d) => typeof d.at === "number");
+}
+
 /**
  * How many darts have landed by `time`, revealed in order as they were detected
  * (synced to the clip). `offsetMs` delays reveals to compensate for the video
@@ -27,7 +32,7 @@ export function revealedCount(
   time: number,
   offsetMs = 0,
 ): number {
-  if (clipStartMs == null || !darts.every((d) => typeof d.at === "number")) return darts.length;
+  if (!hasImpactTiming(darts, clipStartMs)) return darts.length;
   let n = 0;
   for (const d of darts) if ((d.at! - clipStartMs + offsetMs) / 1000 <= time) n++;
   return n;

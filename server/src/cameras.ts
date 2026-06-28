@@ -6,28 +6,14 @@
 // The text parsers are pure and exported so they can be unit-tested without a
 // camera attached.
 
-import { spawnSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { readdir } from "node:fs/promises";
+import { promisify } from "node:util";
+import type { Camera, CameraFormat, CameraSize } from "@shared/types.js";
 import { logger } from "./log.js";
 
 const log = logger("cameras");
-
-export interface CameraSize {
-  w: number;
-  h: number;
-  fps: number[]; // discrete framerates, highest first
-}
-export interface CameraFormat {
-  fourcc: string; // e.g. "MJPG"
-  label: string; // e.g. "Motion-JPEG, compressed"
-  normalized: "h264" | "mjpeg" | "yuyv422" | null; // maps to Config.webcam.format
-  sizes: CameraSize[];
-}
-export interface Camera {
-  path: string; // /dev/videoN
-  name: string;
-  caps: CameraFormat[];
-}
+const execFileAsync = promisify(execFile);
 
 const FOURCC_MAP: Record<string, CameraFormat["normalized"]> = {
   MJPG: "mjpeg",
@@ -83,16 +69,21 @@ export function parseFormats(text: string): CameraFormat[] {
   return formats;
 }
 
-function run(args: string[]): string | null {
-  const r = spawnSync("v4l2-ctl", args, { encoding: "utf8", timeout: 3000 });
-  if (r.error || r.status !== 0 || typeof r.stdout !== "string") return null;
-  return r.stdout;
+/** Run v4l2-ctl off the event loop; resolves null on any failure (incl. missing binary). */
+async function run(args: string[]): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("v4l2-ctl", args, { timeout: 3000 });
+    return stdout;
+  } catch {
+    return null;
+  }
 }
 
 /** /dev/video* fallback when v4l2-ctl is unavailable. */
-function globVideoNodes(): string[] {
+async function globVideoNodes(): Promise<string[]> {
   try {
-    return readdirSync("/dev")
+    const names = await readdir("/dev");
+    return names
       .filter((n) => /^video\d+$/.test(n))
       .map((n) => `/dev/${n}`)
       .sort((a, b) => Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, "")));
@@ -105,11 +96,11 @@ function globVideoNodes(): string[] {
  * List cameras with capabilities. Returns one entry per /dev/video* node that
  * reports at least one format, preserving v4l2-ctl's device ordering and names.
  */
-export function listCameras(): Camera[] {
-  const listing = run(["--list-devices"]);
+export async function listCameras(): Promise<Camera[]> {
+  const listing = await run(["--list-devices"]);
   if (listing === null) {
     log.warn("v4l2-ctl unavailable — camera capability detection limited to a /dev/video* list.");
-    return globVideoNodes().map((path) => ({ path, name: path, caps: [] }));
+    return (await globVideoNodes()).map((path) => ({ path, name: path, caps: [] }));
   }
 
   const groups = parseDevices(listing);
@@ -124,21 +115,25 @@ export function listCameras(): Camera[] {
     }
   }
   // Include any nodes v4l2-ctl didn't group (rare) so nothing is hidden.
-  for (const node of globVideoNodes()) {
+  for (const node of await globVideoNodes()) {
     if (!nameByNode.has(node)) {
       nameByNode.set(node, node);
       ordered.push(node);
     }
   }
 
-  const cameras: Camera[] = [];
-  for (const path of ordered) {
-    const fmtText = run(["-d", path, "--list-formats-ext"]);
-    const caps = fmtText ? parseFormats(fmtText) : [];
-    // Skip pure metadata/output nodes that expose no capture formats.
-    if (caps.length === 0) continue;
-    cameras.push({ path, name: nameByNode.get(path) ?? path, caps });
-  }
+  // Probe each node's formats concurrently — they're independent ioctl queries.
+  const probed = await Promise.all(
+    ordered.map(async (path) => {
+      const fmtText = await run(["-d", path, "--list-formats-ext"]);
+      return { path, caps: fmtText ? parseFormats(fmtText) : [] };
+    }),
+  );
+
+  // Skip pure metadata/output nodes that expose no capture formats.
+  const cameras = probed
+    .filter((p) => p.caps.length > 0)
+    .map((p) => ({ path: p.path, name: nameByNode.get(p.path) ?? p.path, caps: p.caps }));
   // If every node looked capture-less, fall back to showing them all.
   if (cameras.length === 0) {
     return ordered.map((path) => ({ path, name: nameByNode.get(path) ?? path, caps: [] }));

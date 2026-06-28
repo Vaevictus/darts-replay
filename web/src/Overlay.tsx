@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { usePersistedState } from "./hooks.js";
 
 /** Reference guides, positioned as fractions (0–1) of the video frame so they're
  * consistent across clips and sizes. Tuned for a front-on camera: a vertical line
@@ -12,25 +13,13 @@ export interface OverlayConfig {
 const KEY = "darts-replay.overlay";
 export const DEFAULT_OVERLAY: OverlayConfig = { enabled: true, vertical: [0.5], horizontal: [0.4, 0.58] };
 
-export function useOverlay(): [OverlayConfig, (c: OverlayConfig) => void] {
-  const [config, setConfigState] = useState<OverlayConfig>(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) return { ...DEFAULT_OVERLAY, ...(JSON.parse(raw) as OverlayConfig) };
-    } catch {
-      /* fall through to default */
-    }
-    return DEFAULT_OVERLAY;
-  });
-  const setConfig = useCallback((c: OverlayConfig) => {
-    setConfigState(c);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(c));
-    } catch {
-      /* storage may be unavailable */
-    }
-  }, []);
-  return [config, setConfig];
+export function useOverlay() {
+  return usePersistedState<OverlayConfig>(
+    KEY,
+    DEFAULT_OVERLAY,
+    (raw) => ({ ...DEFAULT_OVERLAY, ...(JSON.parse(raw) as OverlayConfig) }),
+    JSON.stringify,
+  );
 }
 
 interface Props {

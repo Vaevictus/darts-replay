@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Config } from "@shared/types.js";
 import { useConfigEditor } from "./useConfig.js";
 import { getCameras, testBoard, type Camera, type BoardTestResult } from "./api.js";
@@ -55,16 +55,13 @@ function CameraSection({
   onChange: (patch: Partial<Config["webcam"]>) => void;
 }) {
   const selected = cameras.find((c) => c.path === webcam.device);
-  const caps = useMemo(() => selected?.caps ?? [], [selected]);
+  const caps = selected?.caps ?? [];
   const hasCaps = caps.length > 0;
 
-  // Formats this camera supports, in config terms.
-  const formats = useMemo(
-    () => Array.from(new Set(caps.map((c) => c.normalized).filter((f): f is NonNullable<typeof f> => !!f))),
-    [caps],
-  );
-  const fmtCap = caps.find((c) => c.normalized === webcam.format);
-  const sizes = fmtCap?.sizes ?? [];
+  // Format options: the camera's detected formats, else the full config set.
+  const detected = Array.from(new Set(caps.map((c) => c.normalized).filter((f): f is NonNullable<typeof f> => !!f)));
+  const formatOptions: readonly string[] = hasCaps ? detected : ["mjpeg", "h264", "yuyv422"];
+  const sizes = caps.find((c) => c.normalized === webcam.format)?.sizes ?? [];
   const size = sizes.find((s) => s.w === webcam.width && s.h === webcam.height);
 
   return (
@@ -83,18 +80,19 @@ function CameraSection({
         </select>
       </label>
 
+      <label className="field">
+        <span className="field__label">Format</span>
+        <select value={webcam.format} onChange={(e) => onChange({ format: e.target.value as Config["webcam"]["format"] })}>
+          {formatOptions.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+      </label>
+
       {hasCaps ? (
         <>
-          <label className="field">
-            <span className="field__label">Format</span>
-            <select value={webcam.format} onChange={(e) => onChange({ format: e.target.value as Config["webcam"]["format"] })}>
-              {formats.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="field">
             <span className="field__label">Resolution</span>
             <select
@@ -124,16 +122,6 @@ function CameraSection({
         </>
       ) : (
         <>
-          <label className="field">
-            <span className="field__label">Format</span>
-            <select value={webcam.format} onChange={(e) => onChange({ format: e.target.value as Config["webcam"]["format"] })}>
-              {(["mjpeg", "h264", "yuyv422"] as const).map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-          </label>
           <NumberField label="Width" value={webcam.width} min={16} onChange={(width) => onChange({ width })} />
           <NumberField label="Height" value={webcam.height} min={16} onChange={(height) => onChange({ height })} />
           <NumberField label="FPS" value={webcam.fps} min={1} onChange={(fps) => onChange({ fps })} />
