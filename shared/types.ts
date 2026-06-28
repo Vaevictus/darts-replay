@@ -47,6 +47,10 @@ export interface Visit {
   finishedAt: number; // epoch ms the visit was locked
   endReason: EndReason;
   clipUrl: string | null; // /clips/<id>.mp4 once extracted, null while pending
+  // Self-review metadata (this is a form tool — "good"/"bad" is form, not score).
+  saved: boolean; // kept beyond the retention ring (a reference-form library)
+  rating: "good" | "bad" | null; // the user's assessment of their form for this visit
+  note: string; // free-text note ("dropped my elbow", etc.)
 }
 
 export interface Config {

@@ -6,7 +6,7 @@ import type { Config } from "@shared/types.js";
 
 const WS_OPEN = 1; // WebSocket.OPEN
 import { Engine, type ServerMessage } from "./engine.js";
-import { VisitStore } from "./store/visits.js";
+import { VisitStore, validateVisitPatch } from "./store/visits.js";
 import { resolvePath, saveConfig, validateConfigPatch } from "./config.js";
 import { logger } from "./log.js";
 
@@ -79,6 +79,16 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     const v = store.get(req.params.id);
     if (!v) return reply.code(404).send({ error: "not found" });
     return v;
+  });
+
+  // Update self-review metadata (rating / saved / note).
+  app.patch<{ Params: { id: string } }>("/api/visits/:id", async (req, reply) => {
+    const { patch, errors } = validateVisitPatch(req.body);
+    if (errors.length) return reply.code(400).send({ error: "invalid patch", details: errors });
+    const updated = await store.update(req.params.id, patch);
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    broadcast({ type: "visit", visit: updated });
+    return updated;
   });
 
   app.get("/api/config", async () => cfg);

@@ -76,6 +76,9 @@ function buildVisit(state: MachineState, finishedAt: number, endReason: EndReaso
     finishedAt,
     endReason,
     clipUrl: null,
+    saved: false,
+    rating: null,
+    note: "",
   };
 }
 

@@ -65,13 +65,59 @@ export class VisitStore {
     return this.visits[idx];
   }
 
-  /** Drop visits beyond the retain count and delete their clip files. */
+  /**
+   * Keep all saved visits plus the newest `retain` unsaved ones; delete the
+   * dropped clips. Saved visits form a persistent reference-form library and are
+   * never auto-pruned.
+   */
   private async prune(): Promise<void> {
-    if (this.visits.length <= this.retain) return;
-    const dropped = this.visits.slice(this.retain);
-    this.visits = this.visits.slice(0, this.retain);
+    let keptUnsaved = 0;
+    const keep: Visit[] = [];
+    const dropped: Visit[] = [];
+    for (const v of this.visits) {
+      // this.visits is newest-first, so we keep the newest unsaved up to retain.
+      if (v.saved || keptUnsaved < this.retain) {
+        keep.push(v);
+        if (!v.saved) keptUnsaved++;
+      } else {
+        dropped.push(v);
+      }
+    }
+    if (dropped.length === 0) return;
+    this.visits = keep;
     for (const v of dropped) {
       await unlink(this.clipPath(v.id)).catch(() => {});
     }
   }
+}
+
+const MAX_NOTE = 2000;
+
+/**
+ * Validate an untrusted visit patch (PATCH body). Returns the recognized,
+ * well-typed subset and a list of errors. Mirrors validateConfigPatch.
+ */
+export function validateVisitPatch(input: unknown): {
+  patch: Partial<Pick<Visit, "saved" | "rating" | "note">>;
+  errors: string[];
+} {
+  const errors: string[] = [];
+  const patch: Partial<Pick<Visit, "saved" | "rating" | "note">> = {};
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return { patch, errors: ["body must be an object"] };
+  }
+  const b = input as Record<string, unknown>;
+  if ("saved" in b) {
+    if (typeof b.saved === "boolean") patch.saved = b.saved;
+    else errors.push("saved must be a boolean");
+  }
+  if ("rating" in b) {
+    if (b.rating === "good" || b.rating === "bad" || b.rating === null) patch.rating = b.rating;
+    else errors.push('rating must be "good", "bad", or null');
+  }
+  if ("note" in b) {
+    if (typeof b.note === "string" && b.note.length <= MAX_NOTE) patch.note = b.note;
+    else errors.push(`note must be a string of <= ${MAX_NOTE} chars`);
+  }
+  return { patch, errors };
 }
