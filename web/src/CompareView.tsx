@@ -1,6 +1,7 @@
-import { useState } from "react";
-import type { Visit } from "@shared/types.js";
+import { useMemo, useState } from "react";
+import type { Visit, Config, Dart } from "@shared/types.js";
 import { Overlay, type OverlayConfig } from "./Overlay.js";
+import { BoardOverlay, revealedCount } from "./BoardOverlay.js";
 import { useVideoController, SPEEDS, formatTime } from "./useVideoController.js";
 
 interface Props {
@@ -9,12 +10,14 @@ interface Props {
   fps: number;
   overlay: OverlayConfig;
   onOverlayChange: (c: OverlayConfig) => void;
+  boardCal: Config["calibration"]["board"];
+  syncOffsetMs: number;
   onClose: () => void;
 }
 
 /** Side-by-side compare with a linked controller. A per-side offset lets you
  * align the release moments, then step/scrub/play both in sync. */
-export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Props) {
+export function CompareView({ a, b, fps, overlay, onOverlayChange, boardCal, syncOffsetMs, onClose }: Props) {
   const [aEl, setAEl] = useState<HTMLVideoElement | null>(null);
   const [bEl, setBEl] = useState<HTMLVideoElement | null>(null);
   const ca = useVideoController(aEl, fps);
@@ -48,7 +51,14 @@ export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Pr
     cb.seek(ca.time + next);
   };
 
-  const side = (visit: Visit, setEl: (el: HTMLVideoElement | null) => void, label: string) => (
+  // Reveal darts in sync with each side's playback; memoize on the count so the
+  // board SVG isn't rebuilt on every time tick.
+  const aCount = revealedCount(a.darts, a.clipStartMs, ca.time, syncOffsetMs);
+  const bCount = revealedCount(b.darts, b.clipStartMs, cb.time, syncOffsetMs);
+  const aDarts = useMemo(() => a.darts.slice(0, aCount), [a.darts, aCount]);
+  const bDarts = useMemo(() => b.darts.slice(0, bCount), [b.darts, bCount]);
+
+  const side = (visit: Visit, setEl: (el: HTMLVideoElement | null) => void, label: string, darts: Dart[]) => (
     <div className="compare__side">
       <div className="compare__label">
         {label}: #{visit.seq}{" "}
@@ -59,6 +69,7 @@ export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Pr
           <video ref={setEl} key={visit.id} src={visit.clipUrl ?? undefined} muted playsInline />
         </div>
         <Overlay config={overlay} onChange={onOverlayChange} />
+        <BoardOverlay cal={boardCal} darts={darts} />
       </div>
     </div>
   );
@@ -66,8 +77,8 @@ export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Pr
   return (
     <div className="compare">
       <div className="compare__sides">
-        {side(a, setAEl, "A")}
-        {side(b, setBEl, "B")}
+        {side(a, setAEl, "A", aDarts)}
+        {side(b, setBEl, "B", bDarts)}
       </div>
 
       <div className="controls">

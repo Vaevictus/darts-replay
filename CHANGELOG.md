@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- Clicking a different clip in the Visits panel while one is playing now switches the
+  player to it (the `<video>` is explicitly reloaded on source change).
+- Compare view now keeps both clips visible on narrow/portrait displays (frames are
+  width-constrained, and the two clips stack vertically in portrait instead of one
+  overflowing off-screen).
+- The calibrated board overlay now renders over the replay and compare videos at the
+  configured position (previously it only appeared in the Settings live view).
+
+### Added
+- Replay/compare board overlay reveals each dart **in sync with the video** — markers
+  pop in as the throws land (using new per-dart timestamps + clip start time). Hit
+  markers are also larger and easier to read.
+- **Board quick actions** in the topbar (like the autodarts Play UI): a live board-connection
+  indicator, **Reset** (re-arm to the throw-ready state after a missed collect / wrong takeout),
+  and **Calibrate** (two-step confirm). Proxied through the server to the Board Manager
+  (`POST /api/reset`, `POST /api/config/calibration/auto?distortion=true`).
+- In-app **Settings screen** (⚙) for all configuration — no more hand-editing `config.json`:
+  autodarts board address (with a "Test connection" button), camera selection with detected
+  resolutions/formats/fps, recording timeouts, retention, and an advanced section.
+- **Camera orientation** (`webcam.rotation` + `flipH`/`flipV`), applied via an ffmpeg filter
+  shared by the recorder and preview. Portrait (90°/270°) captures the player's full stance.
+- **Live camera view** for positioning: pauses recording and streams MJPEG straight from the
+  camera, with an idle watchdog that always resumes recording. Reflects unsaved edits live.
+- Draggable, resizable **wireframe board overlay** plus alignment guides over the live view.
+- **Hot-restart** of capture and board reconnection on config save — camera/orientation/board
+  changes take effect without a full restart.
+- New endpoints: `GET /api/cameras`, `POST /api/board/test`, camera preview start/stop, and a
+  `GET /api/camera/stream` MJPEG feed.
+
 ## [0.1.0] - 2026-06-28
 
 Initial release.

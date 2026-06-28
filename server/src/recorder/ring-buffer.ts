@@ -9,6 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "@shared/types.js";
+import { videoFilters } from "./filters.js";
 import { logger } from "../log.js";
 
 const log = logger("ring");
@@ -43,16 +44,41 @@ export class RingBuffer {
   }
 
   stop(): void {
+    void this.stopAndWait();
+  }
+
+  /** Stop capture and resolve once ffmpeg has actually exited — so the V4L2 device
+   * is released before another consumer (the live preview) opens it. */
+  stopAndWait(): Promise<void> {
     this.stopped = true;
-    if (this.prune) clearInterval(this.prune);
+    if (this.prune) {
+      clearInterval(this.prune);
+      this.prune = null;
+    }
     const proc = this.proc;
     this.proc = null;
-    if (proc) {
+    if (!proc) return Promise.resolve();
+    return new Promise((resolve) => {
       // Let ffmpeg flush/close the current segment, then force-kill if it lingers.
-      proc.kill("SIGTERM");
       const t = setTimeout(() => proc.kill("SIGKILL"), 1500);
-      proc.once("exit", () => clearTimeout(t));
-    }
+      proc.once("exit", () => {
+        clearTimeout(t);
+        resolve();
+      });
+      proc.kill("SIGTERM");
+    });
+  }
+
+  /** Swap in new config (applied on the next (re)start). */
+  setConfig(cfg: Config): void {
+    this.cfg = cfg;
+  }
+
+  /** Stop and restart capture so config changes (device/format/orientation) apply
+   * without a full process restart. */
+  async restart(): Promise<void> {
+    await this.stopAndWait();
+    this.start();
   }
 
   private pruneOld(): void {
@@ -117,7 +143,7 @@ export class RingBuffer {
       "1",
       join(recorder.segmentDir, "seg_%s.ts"),
     ];
-    return [...input, ...codec, ...output];
+    return [...input, ...videoFilters(webcam), ...codec, ...output];
   }
 
   private spawnFfmpeg(): void {

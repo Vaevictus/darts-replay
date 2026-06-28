@@ -55,45 +55,53 @@ function wedge(r1: number, r2: number, a: number, b: number): string {
 export interface BoardOptions {
   showNumbers?: boolean;
   markerRadius?: number;
+  // Outline-only board (no fills, no backing disc) for overlaying on a camera
+  // frame: rings, sector wires, and bulls are stroked in a single colour.
+  wireframe?: boolean;
 }
 
 /** Build the full board SVG with the supplied darts plotted. */
 export function buildBoardSvg(darts: Dart[] = [], opts: BoardOptions = {}): string {
-  const { showNumbers = true, markerRadius = 0.05 } = opts;
+  const { showNumbers = true, markerRadius = 0.05, wireframe = false } = opts;
   const parts: string[] = [];
+  // Slightly bolder lines for the wireframe so it reads over busy video.
+  const wire = wireframe ? "#39ff14" : COLORS.wire;
+  const sw = wireframe ? 0.008 : 0.004;
 
-  // Backing disc just outside the double ring (the "out" area).
-  parts.push(`<circle cx="0" cy="0" r="1.18" fill="#0a0a0a"/>`);
+  if (!wireframe) {
+    // Backing disc just outside the double ring (the "out" area).
+    parts.push(`<circle cx="0" cy="0" r="1.18" fill="#0a0a0a"/>`);
 
-  for (let i = 0; i < 20; i++) {
-    const center = i * 18;
-    const a = center - 9;
-    const b = center + 9;
-    const dark = i % 2 === 0; // 20 is dark/black single + red beds
-    const singleFill = dark ? COLORS.black : COLORS.cream;
-    const ringFill = dark ? COLORS.red : COLORS.green;
+    for (let i = 0; i < 20; i++) {
+      const center = i * 18;
+      const a = center - 9;
+      const b = center + 9;
+      const dark = i % 2 === 0; // 20 is dark/black single + red beds
+      const singleFill = dark ? COLORS.black : COLORS.cream;
+      const ringFill = dark ? COLORS.red : COLORS.green;
 
-    // inner single, triple bed, outer single, double bed
-    parts.push(`<path d="${wedge(RINGS.bullOuter, RINGS.tripleInner, a, b)}" fill="${singleFill}"/>`);
-    parts.push(`<path d="${wedge(RINGS.tripleInner, RINGS.tripleOuter, a, b)}" fill="${ringFill}"/>`);
-    parts.push(`<path d="${wedge(RINGS.tripleOuter, RINGS.doubleInner, a, b)}" fill="${singleFill}"/>`);
-    parts.push(`<path d="${wedge(RINGS.doubleInner, RINGS.doubleOuter, a, b)}" fill="${ringFill}"/>`);
+      // inner single, triple bed, outer single, double bed
+      parts.push(`<path d="${wedge(RINGS.bullOuter, RINGS.tripleInner, a, b)}" fill="${singleFill}"/>`);
+      parts.push(`<path d="${wedge(RINGS.tripleInner, RINGS.tripleOuter, a, b)}" fill="${ringFill}"/>`);
+      parts.push(`<path d="${wedge(RINGS.tripleOuter, RINGS.doubleInner, a, b)}" fill="${singleFill}"/>`);
+      parts.push(`<path d="${wedge(RINGS.doubleInner, RINGS.doubleOuter, a, b)}" fill="${ringFill}"/>`);
+    }
   }
 
   // Sector wires.
   for (let i = 0; i < 20; i++) {
     const [x, y] = polar(RINGS.doubleOuter, i * 18 + 9);
     parts.push(
-      `<line x1="0" y1="0" x2="${x.toFixed(4)}" y2="${(-y).toFixed(4)}" stroke="${COLORS.wire}" stroke-width="0.004"/>`,
+      `<line x1="0" y1="0" x2="${x.toFixed(4)}" y2="${(-y).toFixed(4)}" stroke="${wire}" stroke-width="${sw}"/>`,
     );
   }
   for (const r of [RINGS.tripleInner, RINGS.tripleOuter, RINGS.doubleInner, RINGS.doubleOuter]) {
-    parts.push(`<circle cx="0" cy="0" r="${r}" fill="none" stroke="${COLORS.wire}" stroke-width="0.004"/>`);
+    parts.push(`<circle cx="0" cy="0" r="${r}" fill="none" stroke="${wire}" stroke-width="${sw}"/>`);
   }
 
   // Bulls.
-  parts.push(`<circle cx="0" cy="0" r="${RINGS.bullOuter}" fill="${COLORS.green}" stroke="${COLORS.wire}" stroke-width="0.004"/>`);
-  parts.push(`<circle cx="0" cy="0" r="${RINGS.bullInner}" fill="${COLORS.red}" stroke="${COLORS.wire}" stroke-width="0.004"/>`);
+  parts.push(`<circle cx="0" cy="0" r="${RINGS.bullOuter}" fill="${wireframe ? "none" : COLORS.green}" stroke="${wire}" stroke-width="${sw}"/>`);
+  parts.push(`<circle cx="0" cy="0" r="${RINGS.bullInner}" fill="${wireframe ? "none" : COLORS.red}" stroke="${wire}" stroke-width="${sw}"/>`);
 
   // Numbers around the outside.
   if (showNumbers) {

@@ -17,6 +17,13 @@ describe("merge", () => {
   it("an empty patch is a structural no-op", () => {
     expect(merge(DEFAULT_CONFIG, {})).toEqual(DEFAULT_CONFIG);
   });
+
+  it("deep-merges calibration.board, keeping sibling fields", () => {
+    const out = merge(DEFAULT_CONFIG, { calibration: { board: { x: 0.25, show: true } } });
+    expect(out.calibration.board.x).toBe(0.25);
+    expect(out.calibration.board.show).toBe(true);
+    expect(out.calibration.board.scale).toBe(DEFAULT_CONFIG.calibration.board.scale);
+  });
 });
 
 describe("validateConfigPatch", () => {
@@ -53,5 +60,32 @@ describe("validateConfigPatch", () => {
     expect(patch.board?.port).toBe(5000);
     expect((patch.board as Record<string, unknown>)?.nope).toBeUndefined();
     expect((patch as Record<string, unknown>).bogus).toBeUndefined();
+  });
+
+  it("accepts valid orientation and flips", () => {
+    const { patch, errors } = validateConfigPatch({ webcam: { rotation: 90, flipH: true, flipV: false } });
+    expect(errors).toEqual([]);
+    expect(patch.webcam?.rotation).toBe(90);
+    expect(patch.webcam?.flipH).toBe(true);
+    expect(patch.webcam?.flipV).toBe(false);
+  });
+
+  it("rejects a non-quarter-turn rotation and non-boolean flip", () => {
+    expect(validateConfigPatch({ webcam: { rotation: 45 } }).errors.length).toBeGreaterThan(0);
+    expect(validateConfigPatch({ webcam: { flipH: "yes" } }).errors.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a valid calibration.board patch", () => {
+    const { patch, errors } = validateConfigPatch({
+      calibration: { board: { x: 0.4, y: 0.6, scale: 0.7, rotation: 180, opacity: 0.5, show: true } },
+    });
+    expect(errors).toEqual([]);
+    expect(patch.calibration?.board).toEqual({ x: 0.4, y: 0.6, scale: 0.7, rotation: 180, opacity: 0.5, show: true });
+  });
+
+  it("rejects out-of-range calibration values", () => {
+    expect(validateConfigPatch({ calibration: { board: { x: 1.5 } } }).errors.length).toBeGreaterThan(0);
+    expect(validateConfigPatch({ calibration: { board: { opacity: -0.1 } } }).errors.length).toBeGreaterThan(0);
+    expect(validateConfigPatch({ calibration: { board: { rotation: 400 } } }).errors.length).toBeGreaterThan(0);
   });
 });

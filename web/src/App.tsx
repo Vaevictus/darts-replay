@@ -1,9 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useReplay } from "./useReplay.js";
 import { Dartboard } from "./Dartboard.js";
 import { ReplayPlayer } from "./ReplayPlayer.js";
 import { CompareView } from "./CompareView.js";
-import { useFps } from "./useConfig.js";
+import { Settings } from "./Settings.js";
+import { BoardActions } from "./BoardActions.js";
+import { Heatmap } from "./Heatmap.js";
+import {
+  useFps,
+  useBoardCalibration,
+  useSyncOffset,
+  useHeatmapMode,
+  useHeatmapScale,
+  useHeatmapStore,
+} from "./useConfig.js";
 import { useOverlay } from "./Overlay.js";
 import type { Visit } from "@shared/types.js";
 
@@ -45,12 +55,33 @@ function VisitCard({
 }
 
 export function App() {
-  const { status, visits, nowPlaying, playVisit, clearPlaying } = useReplay();
+  const { status, visits, liveDarts, nowPlaying, playVisit, clearPlaying } = useReplay();
   const fps = useFps();
+  const [boardCal, reloadBoardCal] = useBoardCalibration();
+  const [syncOffset, setSyncOffset] = useSyncOffset();
   const [overlay, setOverlay] = useOverlay();
   const [filter, setFilter] = useState<Filter>("all");
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [heatmapOpen, setHeatmapOpen] = useState(true);
+  const [heatMode, setHeatMode] = useHeatmapMode();
+  const [heatScale, setHeatScale] = useHeatmapScale();
+  const [confirmReset, setConfirmReset] = useState(false);
+  const { coords: storeCoords, ingest: ingestHeat, reset: resetHeat } = useHeatmapStore();
+
+  // The heatmap draws from its own accumulating store (survives visit pruning),
+  // seeded from whatever visits we've seen. Plus the in-progress visit's darts,
+  // shown live and gated to RECORDING so they aren't double-counted once landed.
+  useEffect(() => ingestHeat(visits), [visits, ingestHeat]);
+  const liveCoords = useMemo(
+    () =>
+      (status.phase === "RECORDING" ? liveDarts : [])
+        .map((d) => d.coords)
+        .filter((c): c is { x: number; y: number } => !!c),
+    [liveDarts, status.phase],
+  );
+  const heatCoords = useMemo(() => [...storeCoords, ...liveCoords], [storeCoords, liveCoords]);
 
   // Resolve to the live visit objects so rating/save edits reflect immediately.
   const byId = (id: string | undefined) => visits.find((v) => v.id === id);
@@ -73,13 +104,24 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <h1>🎯 Darts Replay</h1>
+        <BoardActions status={status} />
         <div className="status">
-          <span className={`dot ${status.connected ? "ok" : "bad"}`} />
-          <span className="status__board">{status.board}</span>
           <span className="status__phase">{status.phase}</span>
           {status.phase === "RECORDING" && <span className="status__darts">{status.dartsCount}/3</span>}
+          <button className="topbar__settings" onClick={() => setSettingsOpen(true)} aria-label="Settings">
+            ⚙
+          </button>
         </div>
       </header>
+
+      {settingsOpen && (
+        <Settings
+          onClose={() => {
+            setSettingsOpen(false);
+            reloadBoardCal();
+          }}
+        />
+      )}
 
       <section className="stage">
         {compareOpen && cmp.length === 2 ? (
@@ -89,6 +131,8 @@ export function App() {
             fps={fps}
             overlay={overlay}
             onOverlayChange={setOverlay}
+            boardCal={boardCal}
+            syncOffsetMs={syncOffset}
             onClose={() => setCompareOpen(false)}
           />
         ) : playing?.clipUrl ? (
@@ -97,6 +141,9 @@ export function App() {
             fps={fps}
             overlay={overlay}
             onOverlayChange={setOverlay}
+            boardCal={boardCal}
+            syncOffsetMs={syncOffset}
+            onSyncOffsetChange={setSyncOffset}
             autoPlay
             onClose={clearPlaying}
           />
@@ -120,6 +167,54 @@ export function App() {
           <button onClick={() => { setCompareIds([]); setCompareOpen(false); }}>Clear</button>
         </div>
       )}
+
+      <section className="heatmap">
+        <div className="heatmap__head">
+          <button className="heatmap__title" onClick={() => setHeatmapOpen((o) => !o)}>
+            {heatmapOpen ? "▾" : "▸"} Heatmap
+          </button>
+          <span className="heatmap__count">{heatCoords.length} darts</span>
+        </div>
+        {heatmapOpen && (
+          <>
+            <div className="heatmap__body">
+              {heatCoords.length === 0 ? (
+                <p className="heatmap__empty">Throw to build your heatmap.</p>
+              ) : (
+                <Heatmap coords={heatCoords} mode={heatMode} scale={heatScale} />
+              )}
+            </div>
+            <div className="heatmap__controls">
+              <button onClick={() => setHeatMode(heatMode === "ramp" ? "glow" : "ramp")} title="Color style">
+                {heatMode === "ramp" ? "🔵→🔴 Ramp" : "🟠 Glow"}
+              </button>
+              {heatMode === "ramp" && (
+                <button
+                  onClick={() => setHeatScale(heatScale === "relative" ? "absolute" : "relative")}
+                  title="Relative scales colors to your densest spot; Absolute needs real pile-up to go red"
+                >
+                  {heatScale === "relative" ? "Relative" : "Absolute"}
+                </button>
+              )}
+              <button
+                className="heatmap__reset"
+                onClick={() => {
+                  if (!confirmReset) {
+                    setConfirmReset(true);
+                    setTimeout(() => setConfirmReset(false), 3000);
+                    return;
+                  }
+                  setConfirmReset(false);
+                  resetHeat();
+                }}
+                title="Clear the accumulated heatmap data"
+              >
+                {confirmReset ? "Confirm reset?" : "↺ Reset data"}
+              </button>
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="gallery">
         <div className="gallery__head">

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import type { Visit } from "@shared/types.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Visit, Config } from "@shared/types.js";
 import { Dartboard } from "./Dartboard.js";
 import { Overlay, type OverlayConfig } from "./Overlay.js";
+import { BoardOverlay, revealedCount } from "./BoardOverlay.js";
 import { useVideoController, SPEEDS, formatTime } from "./useVideoController.js";
 import { patchVisit } from "./api.js";
 
@@ -10,15 +11,43 @@ interface Props {
   fps: number;
   overlay: OverlayConfig;
   onOverlayChange: (c: OverlayConfig) => void;
+  boardCal: Config["calibration"]["board"];
+  syncOffsetMs: number;
+  onSyncOffsetChange: (ms: number) => void;
   autoPlay?: boolean;
   onClose?: () => void;
 }
 
 const ZOOMS = [1, 1.5, 2, 3];
 
-export function ReplayPlayer({ visit, fps, overlay, onOverlayChange, autoPlay, onClose }: Props) {
+export function ReplayPlayer({
+  visit,
+  fps,
+  overlay,
+  onOverlayChange,
+  boardCal,
+  syncOffsetMs,
+  onSyncOffsetChange,
+  autoPlay,
+  onClose,
+}: Props) {
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const ctrl = useVideoController(videoEl, fps);
+
+  // Reveal darts in sync with playback. Memoize on the count so the board SVG
+  // only rebuilds when a dart actually lands, not on every time tick.
+  const shownCount = revealedCount(visit.darts, visit.clipStartMs, ctrl.time, syncOffsetMs);
+  const shownDarts = useMemo(() => visit.darts.slice(0, shownCount), [visit.darts, shownCount]);
+  const synced = visit.clipStartMs != null && visit.darts.every((d) => typeof d.at === "number");
+
+  // When the selected clip changes, force the <video> to load the new source and
+  // (if auto-playing) start it. Swapping a video's src alone doesn't reliably
+  // reload it — without this, clicking another clip mid-playback kept the old one.
+  useEffect(() => {
+    if (!videoEl) return;
+    videoEl.load();
+    if (autoPlay) void videoEl.play().catch(() => {});
+  }, [videoEl, visit.clipUrl, autoPlay]);
 
   // A–B loop — markers are clip-specific, so clear them when the clip changes.
   const [a, setA] = useState<number | null>(null);
@@ -85,6 +114,7 @@ export function ReplayPlayer({ visit, fps, overlay, onOverlayChange, autoPlay, o
             />
           </div>
           <Overlay config={overlay} onChange={onOverlayChange} />
+          <BoardOverlay cal={boardCal} darts={shownDarts} />
         </div>
         {onClose && (
           <button className="player__close" onClick={onClose} aria-label="Close">
@@ -168,6 +198,21 @@ export function ReplayPlayer({ visit, fps, overlay, onOverlayChange, autoPlay, o
               {overlay.enabled ? "On" : "Off"}
             </button>
           </span>
+          {synced && boardCal.show && (
+            <span className="controls__group">
+              <label>Impact sync</label>
+              <input
+                type="range"
+                min={-500}
+                max={2500}
+                step={50}
+                value={syncOffsetMs}
+                onChange={(e) => onSyncOffsetChange(Number(e.target.value))}
+                title="Delay the dart markers to line them up with the video"
+              />
+              <span className="controls__time">{syncOffsetMs >= 0 ? "+" : ""}{syncOffsetMs}ms</span>
+            </span>
+          )}
         </div>
       </div>
 

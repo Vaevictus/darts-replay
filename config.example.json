@@ -1,6 +1,16 @@
 {
   "board": { "host": "127.0.0.1", "port": 3180, "pollIntervalMs": 150 },
-  "webcam": { "device": "/dev/video6", "width": 1280, "height": 720, "fps": 30, "format": "mjpeg", "encoder": "x264" },
+  "webcam": {
+    "device": "/dev/video6",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "format": "mjpeg",
+    "encoder": "x264",
+    "rotation": 0,
+    "flipH": false,
+    "flipV": false
+  },
   "recorder": {
     "segmentDir": "/dev/shm/darts-replay/ring",
     "clipDir": "var/clips",
@@ -15,5 +25,8 @@
     "collectTimeoutMs": 4000
   },
   "retainCount": 12,
-  "server": { "port": 8787 }
+  "server": { "port": 8787 },
+  "calibration": {
+    "board": { "x": 0.5, "y": 0.5, "scale": 0.6, "rotation": 0, "opacity": 0.4, "show": false }
+  }
 }

@@ -42,5 +42,17 @@ export function preflight(config: Config): void {
     log.warn("encoder is 'vaapi' but /dev/dri/renderD128 is missing — capture will fail; use 'x264'.");
   }
 
+  // Orientation needs a re-encode; `copy` can't filter, so rotation/flip are ignored.
+  const { rotation, flipH, flipV, encoder } = config.webcam;
+  if (encoder === "copy" && (rotation !== 0 || flipH || flipV)) {
+    log.warn("webcam orientation (rotation/flip) is set but encoder is 'copy' — it can't filter; use 'x264'.");
+  }
+
+  // Capability detection in the Settings UI needs v4l2-ctl; warn (don't fail) if absent.
+  const v4l2 = spawnSync("v4l2-ctl", ["--version"], { stdio: "ignore" });
+  if (v4l2.error || v4l2.status !== 0) {
+    log.warn("v4l2-ctl not found — Settings camera list will fall back to /dev/video* with no capability detection.");
+  }
+
   log.info("preflight checks passed");
 }

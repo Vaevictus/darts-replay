@@ -12,8 +12,10 @@ import {
 } from "@shared/state-machine.js";
 import type { Config, RawBoardState } from "@shared/types.js";
 import type { ServerMessage } from "@shared/messages.js";
+import type { ServerResponse } from "node:http";
 import { BoardAdapter } from "./board/adapter.js";
 import { RingBuffer } from "./recorder/ring-buffer.js";
+import { CameraPreview, type WebcamOverride } from "./recorder/preview.js";
 import { extractClip } from "./recorder/extract.js";
 import { VisitStore } from "./store/visits.js";
 import { resolvePath } from "./config.js";
@@ -29,6 +31,7 @@ export class Engine {
   private timers = new Map<TimerName, NodeJS.Timeout>();
   private adapter: BoardAdapter;
   private ring: RingBuffer;
+  private preview: CameraPreview;
   private store: VisitStore;
   private broadcast: (msg: ServerMessage) => void;
   private lastBoardStatus = "Unknown";
@@ -38,10 +41,15 @@ export class Engine {
     this.store = store;
     this.broadcast = broadcast;
     this.ring = new RingBuffer(cfg);
-    this.adapter = new BoardAdapter({
-      host: cfg.board.host,
-      port: cfg.board.port,
-      pollIntervalMs: cfg.board.pollIntervalMs,
+    this.preview = new CameraPreview(() => this.cfg, this.ring);
+    this.adapter = this.makeAdapter();
+  }
+
+  private makeAdapter(): BoardAdapter {
+    return new BoardAdapter({
+      host: this.cfg.board.host,
+      port: this.cfg.board.port,
+      pollIntervalMs: this.cfg.board.pollIntervalMs,
       onSignal: (sig) => this.handle(sig),
       onState: (s) => this.onBoardState(s),
     });
@@ -54,15 +62,55 @@ export class Engine {
 
   stop(): void {
     this.adapter.stop();
+    this.preview.dispose();
     this.ring.stop();
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
   }
 
-  /** Apply config changes that can take effect live (visit timeouts). Device /
-   * recorder changes require a restart. */
+  /**
+   * Apply config changes. Visit timeouts take effect immediately. Capture-affecting
+   * changes (camera device/format/orientation, segment dirs) hot-restart the ring
+   * buffer; board host/port/poll changes reconnect the adapter — no process restart.
+   */
   updateConfig(cfg: Config): void {
+    const prev = this.cfg;
     this.cfg = cfg;
+    this.ring.setConfig(cfg);
+
+    if (this.captureChanged(prev, cfg) && !this.preview.isPreviewing()) {
+      void this.ring.restart().catch((err) => log.error("capture restart failed:", err));
+    }
+    if (JSON.stringify(prev.board) !== JSON.stringify(cfg.board)) {
+      this.adapter.stop();
+      this.adapter = this.makeAdapter();
+      this.adapter.start();
+    }
+  }
+
+  /** True if a webcam/recorder field that feeds the capture ffmpeg command changed. */
+  private captureChanged(a: Config, b: Config): boolean {
+    if (JSON.stringify(a.webcam) !== JSON.stringify(b.webcam)) return true;
+    return (
+      a.recorder.segmentDir !== b.recorder.segmentDir ||
+      a.recorder.segmentSeconds !== b.recorder.segmentSeconds
+    );
+  }
+
+  /** Enter live-preview mode (pauses recording). */
+  startPreview(): Promise<void> {
+    return this.preview.start();
+  }
+
+  /** Leave live-preview mode (resumes recording). */
+  stopPreview(): void {
+    this.preview.stop();
+  }
+
+  /** Stream multipart MJPEG of the live camera to an HTTP response. The optional
+   * override lets the live view reflect unsaved Settings edits. */
+  streamPreview(res: ServerResponse, override?: WebcamOverride): Promise<void> {
+    return this.preview.stream(res, override);
   }
 
   getState() {
@@ -70,8 +118,10 @@ export class Engine {
       phase: this.state.phase,
       dartsCount: this.state.darts.length,
       board: this.lastBoardStatus,
+      darts: this.state.darts,
       ringHealthy: this.ring.healthy(),
       ringBytes: this.ring.sizeBytes(),
+      previewing: this.preview.isPreviewing(),
     };
   }
 
@@ -96,6 +146,7 @@ export class Engine {
       phase: this.state.phase,
       dartsCount: this.state.darts.length,
       board: this.lastBoardStatus,
+      darts: this.state.darts,
     });
   }
 
@@ -151,7 +202,12 @@ export class Engine {
       const segs = this.ring.segmentsForWindow(startMs, endMs);
       const out = this.store.clipPath(visitId);
       await extractClip(segs, out, resolvePath(this.cfg.recorder.clipDir));
-      const updated = await this.store.update(visitId, { clipUrl: `/clips/${visitId}.mp4` });
+      // The clip's t=0 is the first included segment's start, so impacts can be
+      // synced to playback time as (dart.at - clipStartMs).
+      const updated = await this.store.update(visitId, {
+        clipUrl: `/clips/${visitId}.mp4`,
+        clipStartMs: segs[0]?.start,
+      });
       if (updated) this.broadcast({ type: "visit-ready", visit: updated });
     } catch (err) {
       log.error(`clip extraction failed for ${visitId}:`, err);

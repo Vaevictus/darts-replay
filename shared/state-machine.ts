@@ -120,7 +120,7 @@ function startVisit(seq: number, dart: Dart, now: number, cfg: FsmConfig): StepR
   return {
     state: {
       phase: "RECORDING",
-      darts: [{ ...dart, index: 1 }],
+      darts: [{ ...dart, index: 1, at: now }],
       startedAt: now,
       takeoutSeen: false,
       seq: seq + 1,
@@ -159,7 +159,7 @@ export function step(state: MachineState, signal: Signal, cfg: FsmConfig): StepR
 
     case "RECORDING": {
       if (signal.type === "DART") {
-        const darts = [...state.darts, { ...signal.dart, index: state.darts.length + 1 }];
+        const darts = [...state.darts, { ...signal.dart, index: state.darts.length + 1, at: now }];
         const next = { ...state, darts };
         if (darts.length >= 3) {
           // Third dart: wait a short grace before locking so coords can settle.

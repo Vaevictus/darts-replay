@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { Visit } from "@shared/types.js";
+import type { Visit, Dart } from "@shared/types.js";
 import type { ServerMessage } from "@shared/messages.js";
 
 export interface Status {
@@ -12,6 +12,7 @@ export interface Status {
 export interface ReplayState {
   status: Status;
   visits: Visit[]; // newest first
+  liveDarts: Dart[]; // in-progress visit's darts (not yet a completed visit)
   nowPlaying: Visit | null;
   playVisit: (v: Visit) => void;
   clearPlaying: () => void;
@@ -30,6 +31,7 @@ export function useReplay(): ReplayState {
     connected: false,
   });
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [liveDarts, setLiveDarts] = useState<Dart[]>([]);
   const [nowPlaying, setNowPlaying] = useState<Visit | null>(null);
   const visitsRef = useRef<Visit[]>([]);
   visitsRef.current = visits;
@@ -63,6 +65,7 @@ export function useReplay(): ReplayState {
         switch (msg.type) {
           case "state":
             setStatus((s) => ({ ...s, phase: msg.phase, dartsCount: msg.dartsCount, board: msg.board }));
+            setLiveDarts(msg.darts ?? []);
             break;
           case "visit":
             upsert(msg.visit);
@@ -93,5 +96,5 @@ export function useReplay(): ReplayState {
   const playVisit = useCallback((v: Visit) => setNowPlaying(v), []);
   const clearPlaying = useCallback(() => setNowPlaying(null), []);
 
-  return { status, visits, nowPlaying, playVisit, clearPlaying };
+  return { status, visits, liveDarts, nowPlaying, playVisit, clearPlaying };
 }

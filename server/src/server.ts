@@ -8,9 +8,60 @@ const WS_OPEN = 1; // WebSocket.OPEN
 import { Engine, type ServerMessage } from "./engine.js";
 import { VisitStore, validateVisitPatch } from "./store/visits.js";
 import { resolvePath, saveConfig, validateConfigPatch } from "./config.js";
+import { listCameras } from "./cameras.js";
+import type { WebcamOverride } from "./recorder/preview.js";
 import { logger } from "./log.js";
 
 const log = logger("ws");
+
+const STREAM_FORMATS = new Set(["h264", "mjpeg", "yuyv422"]);
+const STREAM_ROTATIONS = new Set([0, 90, 180, 270]);
+
+// Board Manager control endpoints (POST, empty body), captured from the local
+// :3180 UI. `reset` re-arms the board to the throw-ready state; `calibrate` kicks
+// off auto camera calibration.
+const BOARD_COMMANDS: Record<string, string> = {
+  reset: "/api/reset",
+  calibrate: "/api/config/calibration/auto?distortion=true",
+};
+
+/** POST a command to the autodarts Board Manager. Returns a small result object
+ * (never throws) so the route can relay success/failure to the UI. */
+async function postToBoard(host: string, port: number, path: string): Promise<{ ok: boolean; error?: string }> {
+  const ac = new AbortController();
+  const to = setTimeout(() => ac.abort(), 5000);
+  try {
+    const res = await fetch(`http://${host}:${port}${path}`, { method: "POST", signal: ac.signal });
+    return res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "unreachable" };
+  } finally {
+    clearTimeout(to);
+  }
+}
+
+/** Validate the live-stream query overrides — these feed ffmpeg args, so only
+ * recognized, well-formed values are accepted. */
+function parseStreamOverride(q: Record<string, string>): WebcamOverride {
+  const o: WebcamOverride = {};
+  if (typeof q.device === "string" && /^\/dev\/video\d+$/.test(q.device)) o.device = q.device;
+  if (STREAM_FORMATS.has(q.format)) o.format = q.format as WebcamOverride["format"];
+  const int = (v: string, min: number, max: number) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
+  };
+  const w = q.width !== undefined ? int(q.width, 16, 10000) : undefined;
+  if (w !== undefined) o.width = w;
+  const h = q.height !== undefined ? int(q.height, 16, 10000) : undefined;
+  if (h !== undefined) o.height = h;
+  const fps = q.fps !== undefined ? int(q.fps, 1, 240) : undefined;
+  if (fps !== undefined) o.fps = fps;
+  const rot = Number(q.rotation);
+  if (q.rotation !== undefined && STREAM_ROTATIONS.has(rot)) o.rotation = rot as WebcamOverride["rotation"];
+  if (q.flipH !== undefined) o.flipH = q.flipH === "1" || q.flipH === "true";
+  if (q.flipV !== undefined) o.flipV = q.flipV === "1" || q.flipV === "true";
+  return o;
+}
 
 export interface AppDeps {
   config: Config;
@@ -107,6 +158,67 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     return { ok: true };
   });
 
+  // --- Camera setup (Settings screen) ------------------------------------------
+
+  // Available cameras + capabilities (safe to call while recording).
+  app.get("/api/cameras", async () => listCameras());
+
+  // Test an autodarts board address — host/port from the body so the user can
+  // verify a connection before saving it.
+  app.post<{ Body: { host?: unknown; port?: unknown } }>("/api/board/test", async (req, reply) => {
+    const host = typeof req.body?.host === "string" && req.body.host ? req.body.host : cfg.board.host;
+    const port = Number.isInteger(req.body?.port) ? (req.body!.port as number) : cfg.board.port;
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 2000);
+    try {
+      const res = await fetch(`http://${host}:${port}/api/state`, { signal: ac.signal });
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+      const body = (await res.json()) as { status?: unknown; connected?: unknown };
+      return { ok: true, status: typeof body.status === "string" ? body.status : "reachable", connected: body.connected === true };
+    } catch (err) {
+      return reply.code(200).send({ ok: false, error: err instanceof Error ? err.message : "unreachable" });
+    } finally {
+      clearTimeout(to);
+    }
+  });
+
+  // Board Manager quick actions (reset / re-arm, calibrate). Proxied so the
+  // browser doesn't issue cross-origin POSTs to the board.
+  app.post<{ Params: { action: string } }>("/api/board/command/:action", async (req, reply) => {
+    const path = BOARD_COMMANDS[req.params.action];
+    if (!path) return reply.code(404).send({ ok: false, error: "unknown action" });
+    return postToBoard(cfg.board.host, cfg.board.port, path);
+  });
+
+  // Pause recording and enter live-preview mode.
+  app.post("/api/camera/preview/start", async () => {
+    await engine.startPreview();
+    return { ok: true, previewing: true };
+  });
+
+  // Leave live-preview mode and resume recording.
+  app.post("/api/camera/preview/stop", async () => {
+    engine.stopPreview();
+    return { ok: true, previewing: false };
+  });
+
+  // Live multipart-MJPEG stream of the camera (only while in preview mode). We
+  // hijack the reply and drive the raw response directly from ffmpeg's stdout.
+  // Query params override saved webcam settings so the view reflects unsaved edits.
+  app.get<{ Querystring: Record<string, string> }>("/api/camera/stream", async (req, reply) => {
+    reply.hijack();
+    try {
+      await engine.streamPreview(reply.raw, parseStreamOverride(req.query));
+    } catch (err) {
+      log.error("preview stream error:", err);
+      try {
+        reply.raw.end();
+      } catch {
+        /* already closed */
+      }
+    }
+  });
+
   app.get("/ws", { websocket: true }, (socket) => {
     // Some @fastify/websocket builds hand the handler a connection wrapper rather
     // than the raw ws; resolve whichever actually has .send().
@@ -118,7 +230,7 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     }
     // Prime the new client with current state + recent visits.
     const s = engine.getState();
-    ws.send(JSON.stringify({ type: "state", phase: s.phase, dartsCount: s.dartsCount, board: s.board }));
+    ws.send(JSON.stringify({ type: "state", phase: s.phase, dartsCount: s.dartsCount, board: s.board, darts: s.darts }));
     for (const v of store.list(cfg.retainCount).reverse()) {
       ws.send(JSON.stringify({ type: v.clipUrl ? "visit-ready" : "visit", visit: v }));
     }

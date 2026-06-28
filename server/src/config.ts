@@ -11,7 +11,17 @@ const CONFIG_PATH = resolve(ROOT, "config.json");
 
 export const DEFAULT_CONFIG: Config = {
   board: { host: "127.0.0.1", port: 3180, pollIntervalMs: 150 },
-  webcam: { device: "/dev/video6", width: 1280, height: 720, fps: 30, format: "mjpeg", encoder: "x264" },
+  webcam: {
+    device: "/dev/video6",
+    width: 1280,
+    height: 720,
+    fps: 30,
+    format: "mjpeg",
+    encoder: "x264",
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  },
   recorder: {
     segmentDir: "/dev/shm/darts-replay/ring",
     clipDir: "var/clips",
@@ -23,14 +33,22 @@ export const DEFAULT_CONFIG: Config = {
   visit: { inactivityTimeoutMs: 12000, thirdDartGraceMs: 600, collectTimeoutMs: 4000 },
   retainCount: 12,
   server: { port: 8787 },
+  calibration: {
+    board: { x: 0.5, y: 0.5, scale: 0.6, rotation: 0, opacity: 0.4, show: false },
+  },
 };
 
 /** A patch that may override whole sections or individual nested fields. */
-export type ConfigPatch = {
+type ShallowPatch = {
   [K in keyof Config]?: Config[K] extends object ? Partial<Config[K]> : Config[K];
 };
+// calibration nests two levels, so allow a partial `board` rather than the whole thing.
+export type ConfigPatch = Omit<ShallowPatch, "calibration"> & {
+  calibration?: { board?: Partial<Config["calibration"]["board"]> };
+};
 
-/** Merge a partial config over a base, section by section (one level of nesting). */
+/** Merge a partial config over a base, section by section (one level of nesting,
+ * plus the two-level `calibration.board`). */
 export function merge(base: Config, over: ConfigPatch): Config {
   return {
     board: { ...base.board, ...over.board },
@@ -39,11 +57,13 @@ export function merge(base: Config, over: ConfigPatch): Config {
     visit: { ...base.visit, ...over.visit },
     retainCount: over.retainCount ?? base.retainCount,
     server: { ...base.server, ...over.server },
+    calibration: { board: { ...base.calibration.board, ...over.calibration?.board } },
   };
 }
 
 const WEBCAM_FORMATS = ["h264", "mjpeg", "yuyv422"] as const;
 const ENCODERS = ["copy", "x264", "vaapi"] as const;
+const ROTATIONS = [0, 90, 180, 270] as const;
 
 type Rec = Record<string, unknown>;
 const isObj = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -67,6 +87,8 @@ export function validateConfigPatch(input: unknown): { patch: ConfigPatch; error
   };
   const str = (sec: string, k: string, v: unknown) =>
     typeof v === "string" && v.length > 0 ? v : void errors.push(`${sec}.${k} must be a non-empty string`);
+  const bool = (sec: string, k: string, v: unknown) =>
+    typeof v === "boolean" ? v : void errors.push(`${sec}.${k} must be a boolean`);
 
   if (isObj(input.board)) {
     const b = input.board, out: Partial<Config["board"]> = {};
@@ -89,6 +111,12 @@ export function validateConfigPatch(input: unknown): { patch: ConfigPatch; error
       if ((ENCODERS as readonly unknown[]).includes(w.encoder)) out.encoder = w.encoder as Config["webcam"]["encoder"];
       else errors.push(`webcam.encoder must be one of ${ENCODERS.join(", ")}`);
     }
+    if ("rotation" in w) {
+      if ((ROTATIONS as readonly unknown[]).includes(w.rotation)) out.rotation = w.rotation as Config["webcam"]["rotation"];
+      else errors.push(`webcam.rotation must be one of ${ROTATIONS.join(", ")}`);
+    }
+    if ("flipH" in w) { const r = bool("webcam", "flipH", w.flipH); if (r !== undefined) out.flipH = r; }
+    if ("flipV" in w) { const r = bool("webcam", "flipV", w.flipV); if (r !== undefined) out.flipV = r; }
     patch.webcam = out;
   }
   if (isObj(input.recorder)) {
@@ -116,6 +144,15 @@ export function validateConfigPatch(input: unknown): { patch: ConfigPatch; error
     const s = input.server, out: Partial<Config["server"]> = {};
     if ("port" in s) { const r = num("server", "port", s.port, { min: 1, max: 65535, int: true }); if (r !== undefined) out.port = r; }
     patch.server = out;
+  }
+  if (isObj(input.calibration) && isObj(input.calibration.board)) {
+    const b = input.calibration.board, out: Partial<Config["calibration"]["board"]> = {};
+    for (const k of ["x", "y", "scale", "opacity"] as const) {
+      if (k in b) { const r = num("calibration.board", k, b[k], { min: 0, max: 1 }); if (r !== undefined) out[k] = r; }
+    }
+    if ("rotation" in b) { const r = num("calibration.board", "rotation", b.rotation, { min: 0, max: 360 }); if (r !== undefined) out.rotation = r; }
+    if ("show" in b) { const r = bool("calibration.board", "show", b.show); if (r !== undefined) out.show = r; }
+    patch.calibration = { board: out };
   }
 
   return { patch, errors };
