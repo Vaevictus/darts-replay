@@ -1,14 +1,15 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
-import { existsSync } from "node:fs";
-import type { Config } from "@shared/types.js";
+import { existsSync, mkdirSync } from "node:fs";
+import type { Config, OverlayConfig, ShareHost, ShareOptions, Visit } from "@shared/types.js";
 
 const WS_OPEN = 1; // WebSocket.OPEN
 import { Engine, type ServerMessage } from "./engine.js";
 import { VisitStore, validateVisitPatch } from "./store/visits.js";
 import { resolvePath, saveConfig, validateConfigPatch, WEBCAM_FORMATS, ROTATIONS } from "./config.js";
 import { listCameras } from "./cameras.js";
+import { shareVisits } from "./share.js";
 import { fetchWithTimeout } from "./fetch.js";
 import type { WebcamOverride } from "./recorder/preview.js";
 import { logger } from "./log.js";
@@ -60,6 +61,39 @@ function parseStreamOverride(q: Record<string, string>): WebcamOverride {
   return o;
 }
 
+/** Strip the Streamable password before sending config to the (LAN, unauthed) UI. */
+function publicConfig(c: Config): Config {
+  return { ...c, sharing: { ...c.sharing, streamable: { ...c.sharing.streamable, password: "" } } };
+}
+
+/** Validate a Share request's options, filling defaults for anything missing. */
+function validateShareOptions(input: unknown): { options: ShareOptions; errors: string[] } {
+  const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const errors: string[] = [];
+  const flag = (k: keyof ShareOptions, d: boolean) => (typeof o[k] === "boolean" ? (o[k] as boolean) : d);
+  const validHost = o.host === "none" || o.host === "catbox" || o.host === "streamable";
+  if (o.host !== undefined && !validHost) errors.push("options.host must be none|catbox|streamable");
+  return {
+    options: {
+      burnBoard: flag("burnBoard", true),
+      burnGuides: flag("burnGuides", true),
+      burnDarts: flag("burnDarts", false),
+      burnCaption: flag("burnCaption", true),
+      host: validHost ? (o.host as ShareHost) : "none",
+      multi: o.multi === "stitch" ? "stitch" : "separate",
+    },
+    errors,
+  };
+}
+
+/** Coerce an untrusted guides payload to a safe OverlayConfig (fractions 0..1). */
+function normalizeGuides(input: unknown): OverlayConfig {
+  const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const fracs = (v: unknown) =>
+    Array.isArray(v) ? v.filter((n): n is number => typeof n === "number" && n >= 0 && n <= 1) : [];
+  return { enabled: o.enabled !== false, vertical: fracs(o.vertical), horizontal: fracs(o.horizontal) };
+}
+
 export interface AppDeps {
   config: Config;
   store: VisitStore;
@@ -101,6 +135,11 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     decorateReply: true,
   });
 
+  // Exported share files (must exist before fastify-static probes the root).
+  const shareDir = resolvePath("var/share");
+  mkdirSync(shareDir, { recursive: true });
+  void app.register(fastifyStatic, { root: shareDir, prefix: "/share/", decorateReply: false });
+
   // Built SPA (web/dist). Registered only if present (dev uses the vite server).
   const webDist = resolvePath("web/dist");
   if (existsSync(webDist)) {
@@ -139,20 +178,47 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     return updated;
   });
 
-  app.get("/api/config", async () => cfg);
+  app.get("/api/config", async () => publicConfig(cfg));
 
   app.put("/api/config", async (req, reply) => {
     const { patch, errors } = validateConfigPatch(req.body);
     if (errors.length) return reply.code(400).send({ error: "invalid config", details: errors });
+    // A blank Streamable password means "unchanged" — keep the stored one.
+    if (patch.sharing?.streamable?.password === "") delete patch.sharing.streamable.password;
     cfg = await saveConfig(patch);
     engine.updateConfig(cfg);
-    broadcast({ type: "config", config: cfg });
-    return { config: cfg, note: "device/recorder changes take effect after a restart" };
+    broadcast({ type: "config", config: publicConfig(cfg) });
+    return { config: publicConfig(cfg), note: "device/recorder changes take effect after a restart" };
   });
 
   app.post<{ Params: { id: string } }>("/api/replay/:id", async (req, reply) => {
     if (!engine.replay(req.params.id)) return reply.code(404).send({ error: "no clip" });
     return { ok: true };
+  });
+
+  // Burn overlays into the selected clips, optionally stitch + upload for sharing.
+  app.post<{ Body: { ids?: unknown; guides?: unknown; options?: unknown } }>("/api/share", async (req, reply) => {
+    const body = req.body ?? {};
+    const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === "string") : [];
+    if (ids.length === 0) return reply.code(400).send({ error: "no clip ids" });
+    const visits = ids.map((id) => store.get(id)).filter((v): v is Visit => !!v?.clipUrl);
+    if (visits.length === 0) return reply.code(404).send({ error: "no matching clips with video" });
+    const { options, errors } = validateShareOptions(body.options);
+    if (errors.length) return reply.code(400).send({ error: "invalid options", details: errors });
+    try {
+      return await shareVisits({
+        visits,
+        clipPathFor: (id) => store.clipPath(id),
+        shareDir,
+        cal: cfg.calibration.board,
+        guides: normalizeGuides(body.guides),
+        options,
+        streamable: cfg.sharing.streamable,
+      });
+    } catch (err) {
+      log.error("share failed:", err);
+      return reply.code(500).send({ error: err instanceof Error ? err.message : "share failed" });
+    }
   });
 
   // --- Camera setup (Settings screen) ------------------------------------------

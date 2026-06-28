@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Clip sharing** — select one or more clips (📤 on a card) and export a re-encoded
+  H.264 MP4 with the overlays **burned in**: the calibrated board (optionally with the
+  visit's dart markers), the reference guide wires, and a small caption — each a per-export
+  toggle (defaults configurable under Settings → Sharing). Multiple clips can be stitched
+  into one compilation or exported separately. Optional one-click upload to **catbox.moe**
+  (no account) or **Streamable** (your account), returning a link to paste into a Reddit
+  post; otherwise a local download. Overlays are generated server-side (`buildOverlaySvg` +
+  `@resvg/resvg-js`) and burned with a single ffmpeg `overlay` pass — no browser/canvas work.
+
 ### Fixed
 - Clicking a different clip in the Visits panel while one is playing now switches the
   player to it (the `<video>` is explicitly reloaded on source change).

@@ -28,5 +28,13 @@
   "server": { "port": 8787 },
   "calibration": {
     "board": { "x": 0.5, "y": 0.5, "scale": 0.6, "rotation": 0, "opacity": 0.4, "show": false }
+  },
+  "sharing": {
+    "defaultHost": "none",
+    "burnBoard": true,
+    "burnGuides": true,
+    "burnDarts": false,
+    "burnCaption": true,
+    "streamable": { "email": "", "password": "" }
   }
 }

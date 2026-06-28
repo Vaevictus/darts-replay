@@ -1,4 +1,4 @@
-import type { Camera, Config, Visit } from "@shared/types.js";
+import type { Camera, Config, OverlayConfig, ShareOptions, ShareResult, Visit } from "@shared/types.js";
 
 export type { Camera, CameraFormat, CameraSize } from "@shared/types.js";
 
@@ -84,4 +84,19 @@ export async function startPreview(): Promise<void> {
 
 export async function stopPreview(): Promise<void> {
   await fetch("/api/camera/preview/stop", { method: "POST" });
+}
+
+/** Burn overlays into the selected clips (and optionally stitch + upload). The
+ * server does all the work; we pass the current guide config + per-export options. */
+export async function shareClips(ids: string[], guides: OverlayConfig, options: ShareOptions): Promise<ShareResult> {
+  const res = await fetch("/api/share", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids, guides, options }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; details?: string[] };
+    throw new Error(body.details?.join("; ") ?? body.error ?? `share failed: ${res.status}`);
+  }
+  return (await res.json()) as ShareResult;
 }

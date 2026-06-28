@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { OverlayConfig } from "@shared/types.js";
 import { usePersistedState } from "./hooks.js";
 
-/** Reference guides, positioned as fractions (0–1) of the video frame so they're
- * consistent across clips and sizes. Tuned for a front-on camera: a vertical line
- * for stance alignment / lean, horizontals for shoulder and release height. */
-export interface OverlayConfig {
-  enabled: boolean;
-  vertical: number[]; // x fractions
-  horizontal: number[]; // y fractions
-}
+export type { OverlayConfig };
 
 const KEY = "darts-replay.overlay";
 export const DEFAULT_OVERLAY: OverlayConfig = { enabled: true, vertical: [0.5], horizontal: [0.4, 0.58] };

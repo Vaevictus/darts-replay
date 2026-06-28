@@ -18,6 +18,14 @@ describe("merge", () => {
     expect(merge(DEFAULT_CONFIG, {})).toEqual(DEFAULT_CONFIG);
   });
 
+  it("deep-merges sharing.streamable, keeping sibling fields", () => {
+    const out = merge(DEFAULT_CONFIG, { sharing: { defaultHost: "catbox", streamable: { email: "a@b.c" } } });
+    expect(out.sharing.defaultHost).toBe("catbox");
+    expect(out.sharing.streamable.email).toBe("a@b.c");
+    expect(out.sharing.streamable.password).toBe(DEFAULT_CONFIG.sharing.streamable.password);
+    expect(out.sharing.burnBoard).toBe(DEFAULT_CONFIG.sharing.burnBoard);
+  });
+
   it("deep-merges calibration.board, keeping sibling fields", () => {
     const out = merge(DEFAULT_CONFIG, { calibration: { board: { x: 0.25, show: true } } });
     expect(out.calibration.board.x).toBe(0.25);
@@ -87,5 +95,20 @@ describe("validateConfigPatch", () => {
     expect(validateConfigPatch({ calibration: { board: { x: 1.5 } } }).errors.length).toBeGreaterThan(0);
     expect(validateConfigPatch({ calibration: { board: { opacity: -0.1 } } }).errors.length).toBeGreaterThan(0);
     expect(validateConfigPatch({ calibration: { board: { rotation: 400 } } }).errors.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a valid sharing patch (incl. empty streamable creds)", () => {
+    const { patch, errors } = validateConfigPatch({
+      sharing: { defaultHost: "streamable", burnDarts: true, streamable: { email: "x@y.z", password: "" } },
+    });
+    expect(errors).toEqual([]);
+    expect(patch.sharing?.defaultHost).toBe("streamable");
+    expect(patch.sharing?.burnDarts).toBe(true);
+    expect(patch.sharing?.streamable).toEqual({ email: "x@y.z", password: "" });
+  });
+
+  it("rejects a bad sharing host and non-boolean burn flag", () => {
+    expect(validateConfigPatch({ sharing: { defaultHost: "youtube" } }).errors.length).toBeGreaterThan(0);
+    expect(validateConfigPatch({ sharing: { burnGuides: "yes" } }).errors.length).toBeGreaterThan(0);
   });
 });

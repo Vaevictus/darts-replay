@@ -36,15 +36,26 @@ export const DEFAULT_CONFIG: Config = {
   calibration: {
     board: { x: 0.5, y: 0.5, scale: 0.6, rotation: 0, opacity: 0.4, show: false },
   },
+  sharing: {
+    defaultHost: "none",
+    burnBoard: true,
+    burnGuides: true,
+    burnDarts: false,
+    burnCaption: true,
+    streamable: { email: "", password: "" },
+  },
 };
 
 /** A patch that may override whole sections or individual nested fields. */
 type ShallowPatch = {
   [K in keyof Config]?: Config[K] extends object ? Partial<Config[K]> : Config[K];
 };
-// calibration nests two levels, so allow a partial `board` rather than the whole thing.
-export type ConfigPatch = Omit<ShallowPatch, "calibration"> & {
+// calibration and sharing nest two levels, so allow a partial inner object.
+export type ConfigPatch = Omit<ShallowPatch, "calibration" | "sharing"> & {
   calibration?: { board?: Partial<Config["calibration"]["board"]> };
+  sharing?: Partial<Omit<Config["sharing"], "streamable">> & {
+    streamable?: Partial<Config["sharing"]["streamable"]>;
+  };
 };
 
 /** Merge a partial config over a base, section by section (one level of nesting,
@@ -58,12 +69,18 @@ export function merge(base: Config, over: ConfigPatch): Config {
     retainCount: over.retainCount ?? base.retainCount,
     server: { ...base.server, ...over.server },
     calibration: { board: { ...base.calibration.board, ...over.calibration?.board } },
+    sharing: {
+      ...base.sharing,
+      ...over.sharing,
+      streamable: { ...base.sharing.streamable, ...over.sharing?.streamable },
+    },
   };
 }
 
 export const WEBCAM_FORMATS = ["h264", "mjpeg", "yuyv422"] as const;
 const ENCODERS = ["copy", "x264", "vaapi"] as const;
 export const ROTATIONS = [0, 90, 180, 270] as const;
+const SHARE_HOSTS = ["none", "catbox", "streamable"] as const;
 
 type Rec = Record<string, unknown>;
 const isObj = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -153,6 +170,29 @@ export function validateConfigPatch(input: unknown): { patch: ConfigPatch; error
     if ("rotation" in b) { const r = num("calibration.board", "rotation", b.rotation, { min: 0, max: 360 }); if (r !== undefined) out.rotation = r; }
     if ("show" in b) { const r = bool("calibration.board", "show", b.show); if (r !== undefined) out.show = r; }
     patch.calibration = { board: out };
+  }
+  if (isObj(input.sharing)) {
+    const sh = input.sharing;
+    const out: NonNullable<ConfigPatch["sharing"]> = {};
+    if ("defaultHost" in sh) {
+      if ((SHARE_HOSTS as readonly unknown[]).includes(sh.defaultHost)) out.defaultHost = sh.defaultHost as Config["sharing"]["defaultHost"];
+      else errors.push(`sharing.defaultHost must be one of ${SHARE_HOSTS.join(", ")}`);
+    }
+    for (const k of ["burnBoard", "burnGuides", "burnDarts", "burnCaption"] as const) {
+      if (k in sh) { const r = bool("sharing", k, sh[k]); if (r !== undefined) out[k] = r; }
+    }
+    if (isObj(sh.streamable)) {
+      const st = sh.streamable, so: Partial<Config["sharing"]["streamable"]> = {};
+      for (const k of ["email", "password"] as const) {
+        // Empty strings are valid here (means "unset"), so don't use the non-empty `str`.
+        if (k in st) {
+          if (typeof st[k] === "string") so[k] = st[k] as string;
+          else errors.push(`sharing.streamable.${k} must be a string`);
+        }
+      }
+      out.streamable = so;
+    }
+    patch.sharing = out;
   }
 
   return { patch, errors };

@@ -102,6 +102,44 @@ export interface Config {
       show: boolean; // overlay visible
     };
   };
+  sharing: {
+    defaultHost: ShareHost; // pre-selected host in the Share dialog
+    burnBoard: boolean; // default: burn the calibrated board overlay
+    burnGuides: boolean; // default: burn the reference guide wires
+    burnDarts: boolean; // default: plot the visit's dart markers on the board
+    burnCaption: boolean; // default: add a small caption/watermark
+    streamable: { email: string; password: string }; // creds (gitignored config; empty by default)
+  };
+}
+
+/** Reference guides over the video frame, as 0..1 fractions (DOM-free so the
+ * server can build the same overlay when burning a clip for sharing). */
+export interface OverlayConfig {
+  enabled: boolean;
+  vertical: number[]; // x fractions
+  horizontal: number[]; // y fractions
+}
+
+export type ShareHost = "none" | "catbox" | "streamable";
+
+/** Per-export choices made in the Share dialog. */
+export interface ShareOptions {
+  burnBoard: boolean;
+  burnGuides: boolean;
+  burnDarts: boolean;
+  burnCaption: boolean;
+  host: ShareHost;
+  multi: "stitch" | "separate"; // one compilation vs one file per clip
+}
+
+export interface ShareLink {
+  host: ShareHost;
+  url: string;
+  error?: string;
+}
+export interface ShareResult {
+  files: string[]; // /share/<name>.mp4 download paths
+  links: ShareLink[]; // uploaded URLs (when a host was chosen)
 }
 
 /** A V4L2 camera and its capabilities, as returned by GET /api/cameras. */

@@ -3,6 +3,7 @@ import { useReplay } from "./useReplay.js";
 import { Dartboard } from "./Dartboard.js";
 import { ReplayPlayer } from "./ReplayPlayer.js";
 import { CompareView } from "./CompareView.js";
+import { ShareDialog } from "./ShareDialog.js";
 import { Settings } from "./Settings.js";
 import { BoardActions } from "./BoardActions.js";
 import { Heatmap } from "./Heatmap.js";
@@ -29,15 +30,19 @@ function VisitCard({
   visit,
   onPlay,
   onToggleCompare,
+  onToggleShare,
   comparing,
+  sharing,
 }: {
   visit: Visit;
   onPlay: (v: Visit) => void;
   onToggleCompare: (v: Visit) => void;
+  onToggleShare: (v: Visit) => void;
   comparing: boolean;
+  sharing: boolean;
 }) {
   return (
-    <div className={`card ${comparing ? "card--cmp" : ""}`}>
+    <div className={`card ${comparing ? "card--cmp" : ""} ${sharing ? "card--share" : ""}`}>
       <button className="card__play" onClick={() => onPlay(visit)} disabled={!visit.clipUrl}>
         <div className="card__board">
           <Dartboard darts={visit.darts} />
@@ -48,9 +53,14 @@ function VisitCard({
           <span className="card__status">{visit.clipUrl ? "▶ review" : "recording…"}</span>
         </div>
       </button>
-      <button className="card__cmp" onClick={() => onToggleCompare(visit)} disabled={!visit.clipUrl}>
-        {comparing ? "⇄ selected" : "⇄ compare"}
-      </button>
+      <div className="card__actions">
+        <button className="card__cmp" onClick={() => onToggleCompare(visit)} disabled={!visit.clipUrl}>
+          {comparing ? "⇄ selected" : "⇄ compare"}
+        </button>
+        <button className="card__share" onClick={() => onToggleShare(visit)} disabled={!visit.clipUrl}>
+          {sharing ? "📤 selected" : "📤 share"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -64,6 +74,8 @@ export function App() {
   const [filter, setFilter] = useState<Filter>("all");
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [shareIds, setShareIds] = useState<string[]>([]);
+  const [shareOpen, setShareOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [heatmapOpen, setHeatmapOpen] = useState(true);
   const [heatMode, setHeatMode] = useHeatmapMode();
@@ -88,6 +100,7 @@ export function App() {
   const byId = (id: string | undefined) => visits.find((v) => v.id === id);
   const playing = nowPlaying ? (byId(nowPlaying.id) ?? nowPlaying) : null;
   const cmp = compareIds.map(byId).filter((v): v is Visit => !!v);
+  const shareSel = shareIds.map(byId).filter((v): v is Visit => !!v);
 
   const filtered = useMemo(() => {
     if (filter === "saved") return visits.filter((v) => v.saved);
@@ -100,6 +113,8 @@ export function App() {
     setCompareIds((ids) =>
       ids.includes(v.id) ? ids.filter((x) => x !== v.id) : [...ids, v.id].slice(-2),
     );
+  const toggleShare = (v: Visit) =>
+    setShareIds((ids) => (ids.includes(v.id) ? ids.filter((x) => x !== v.id) : [...ids, v.id]));
 
   return (
     <div className="app">
@@ -169,6 +184,18 @@ export function App() {
         </div>
       )}
 
+      {shareSel.length > 0 && (
+        <div className="cmpbar">
+          <span>Share: {shareSel.map((v) => `#${v.seq}`).join(", ")}</span>
+          <button onClick={() => setShareOpen(true)}>Share {shareSel.length}</button>
+          <button onClick={() => setShareIds([])}>Clear</button>
+        </div>
+      )}
+
+      {shareOpen && shareSel.length > 0 && (
+        <ShareDialog visits={shareSel} guides={overlay} onClose={() => setShareOpen(false)} />
+      )}
+
       <section className="heatmap">
         <div className="heatmap__head">
           <button className="heatmap__title" onClick={() => setHeatmapOpen((o) => !o)}>
@@ -227,7 +254,9 @@ export function App() {
               visit={v}
               onPlay={playVisit}
               onToggleCompare={toggleCompare}
+              onToggleShare={toggleShare}
               comparing={compareIds.includes(v.id)}
+              sharing={shareIds.includes(v.id)}
             />
           ))}
           {filtered.length === 0 && (

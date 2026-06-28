@@ -1,24 +1,12 @@
 // Build a per-visit MP4 by stream-copying the ring segments that overlap the
 // visit window. No re-encode -> fast ("instant") finalize.
 
-import { spawn } from "node:child_process";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { SegmentWindow } from "./ring-buffer.js";
+import { runFfmpeg } from "../ffmpeg.js";
 
 export class ExtractError extends Error {}
-
-function runFfmpeg(args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
-    let stderr = "";
-    proc.stderr?.on("data", (b) => (stderr += b.toString()));
-    proc.on("error", reject);
-    proc.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new ExtractError(`ffmpeg exited ${code}: ${stderr.slice(-800)}`)),
-    );
-  });
-}
 
 /**
  * Concatenate (stream-copy) the given segments into `outPath`.

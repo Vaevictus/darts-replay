@@ -179,6 +179,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const setRecorder = (patch: Partial<Config["recorder"]>) => setSection("recorder", patch);
   const setVisit = (patch: Partial<Config["visit"]>) => setSection("visit", patch);
   const setCal = (board: Config["calibration"]["board"]) => setDraft({ ...draft, calibration: { board } });
+  const setSharing = (patch: Partial<Config["sharing"]>) => setSection("sharing", patch);
+  const setStreamable = (patch: Partial<Config["sharing"]["streamable"]>) =>
+    setDraft({ ...draft, sharing: { ...draft.sharing, streamable: { ...draft.sharing.streamable, ...patch } } });
 
   const runTest = async () => {
     setTesting(true);
@@ -369,6 +372,68 @@ export function Settings({ onClose }: { onClose: () => void }) {
                 </label>
               </div>
             )}
+          </section>
+
+          <section className="settings__section">
+            <h3>Sharing</h3>
+            <p className="settings__note">
+              Defaults for the Share dialog (📤 on a clip). Overlays are burned into a re-encoded
+              MP4 for posting to e.g. /r/darts.
+            </p>
+            <div className="settings__row">
+              <span className="field__label">Burn by default</span>
+              {(
+                [
+                  ["burnBoard", "Board"],
+                  ["burnGuides", "Guides"],
+                  ["burnDarts", "Darts"],
+                  ["burnCaption", "Caption"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  className={draft.sharing[k] ? "active" : ""}
+                  onClick={() => setSharing({ [k]: !draft.sharing[k] })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="settings__grid">
+              <label className="field">
+                <span className="field__label">Default host</span>
+                <select
+                  value={draft.sharing.defaultHost}
+                  onChange={(e) => setSharing({ defaultHost: e.target.value as Config["sharing"]["defaultHost"] })}
+                >
+                  <option value="none">None — download only</option>
+                  <option value="catbox">catbox.moe (no account)</option>
+                  <option value="streamable">Streamable (account)</option>
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Streamable email</span>
+                <span className="field__input">
+                  <input
+                    value={draft.sharing.streamable.email}
+                    onChange={(e) => setStreamable({ email: e.target.value })}
+                    placeholder="for Streamable uploads"
+                  />
+                </span>
+              </label>
+              <label className="field">
+                <span className="field__label">Streamable password</span>
+                <span className="field__input">
+                  <input
+                    type="password"
+                    value={draft.sharing.streamable.password}
+                    onChange={(e) => setStreamable({ password: e.target.value })}
+                    placeholder="leave blank to keep current"
+                  />
+                </span>
+              </label>
+            </div>
+            <p className="settings__note">catbox.moe needs no account. Streamable embeds inline on Reddit but needs your login.</p>
           </section>
 
           <section className="settings__section settings__health">
