@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { Visit } from "@shared/types.js";
 import { Overlay, type OverlayConfig } from "./Overlay.js";
 import { useVideoController, SPEEDS, formatTime } from "./useVideoController.js";
@@ -15,10 +15,10 @@ interface Props {
 /** Side-by-side compare with a linked controller. A per-side offset lets you
  * align the release moments, then step/scrub/play both in sync. */
 export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Props) {
-  const aRef = useRef<HTMLVideoElement>(null);
-  const bRef = useRef<HTMLVideoElement>(null);
-  const ca = useVideoController(aRef, fps);
-  const cb = useVideoController(bRef, fps);
+  const [aEl, setAEl] = useState<HTMLVideoElement | null>(null);
+  const [bEl, setBEl] = useState<HTMLVideoElement | null>(null);
+  const ca = useVideoController(aEl, fps);
+  const cb = useVideoController(bEl, fps);
   const [offset, setOffset] = useState(0); // seconds added to A's time for B
 
   const seekBoth = (t: number) => {
@@ -48,7 +48,7 @@ export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Pr
     cb.seek(ca.time + next);
   };
 
-  const side = (visit: Visit, ref: React.RefObject<HTMLVideoElement | null>, label: string) => (
+  const side = (visit: Visit, setEl: (el: HTMLVideoElement | null) => void, label: string) => (
     <div className="compare__side">
       <div className="compare__label">
         {label}: #{visit.seq}{" "}
@@ -56,7 +56,7 @@ export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Pr
       </div>
       <div className="player__frame">
         <div className="player__zoom">
-          <video ref={ref} key={visit.id} src={visit.clipUrl ?? undefined} muted playsInline />
+          <video ref={setEl} key={visit.id} src={visit.clipUrl ?? undefined} muted playsInline />
         </div>
         <Overlay config={overlay} onChange={onOverlayChange} />
       </div>
@@ -66,8 +66,8 @@ export function CompareView({ a, b, fps, overlay, onOverlayChange, onClose }: Pr
   return (
     <div className="compare">
       <div className="compare__sides">
-        {side(a, aRef, "A")}
-        {side(b, bRef, "B")}
+        {side(a, setAEl, "A")}
+        {side(b, setBEl, "B")}
       </div>
 
       <div className="controls">

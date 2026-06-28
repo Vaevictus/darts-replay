@@ -17,8 +17,8 @@ interface Props {
 const ZOOMS = [1, 1.5, 2, 3];
 
 export function ReplayPlayer({ visit, fps, overlay, onOverlayChange, autoPlay, onClose }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const ctrl = useVideoController(videoRef, fps);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const ctrl = useVideoController(videoEl, fps);
 
   // A–B loop
   const [a, setA] = useState<number | null>(null);
@@ -70,7 +70,7 @@ export function ReplayPlayer({ visit, fps, overlay, onOverlayChange, autoPlay, o
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
           >
             <video
-              ref={videoRef}
+              ref={setVideoEl}
               key={visit.id}
               src={visit.clipUrl ?? undefined}
               autoPlay={autoPlay}
