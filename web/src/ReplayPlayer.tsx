@@ -20,10 +20,15 @@ export function ReplayPlayer({ visit, fps, overlay, onOverlayChange, autoPlay, o
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const ctrl = useVideoController(videoEl, fps);
 
-  // A–B loop
+  // A–B loop — markers are clip-specific, so clear them when the clip changes.
   const [a, setA] = useState<number | null>(null);
   const [b, setB] = useState<number | null>(null);
   const [loop, setLoop] = useState(false);
+  useEffect(() => {
+    setA(null);
+    setB(null);
+    setLoop(false);
+  }, [visit.id]);
   useEffect(() => {
     if (loop && a !== null && b !== null && b > a && ctrl.time >= b) ctrl.seek(a);
   }, [loop, a, b, ctrl]);
