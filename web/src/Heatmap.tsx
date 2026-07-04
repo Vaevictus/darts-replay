@@ -10,11 +10,12 @@ export type HeatmapScale = "relative" | "absolute";
 // Accumulated alpha (~4 overlapping darts) that reads as full red in absolute mode.
 const ABSOLUTE_REF = 160;
 
-// Per-dart kernel radius as a fraction of the canvas. Kept small on purpose:
-// blob_board_radius = BLOB_FRAC * 2.3 ≈ 0.069 (≈ 12 mm on a real board), so a
+// Default per-dart kernel radius as a fraction of the canvas (the `kernel` prop;
+// tunable in Settings via useHeatmapKernel). Kept small on purpose:
+// blob_board_radius = kernel * 2.3 ≈ 0.069 (≈ 12 mm on a real board), so a
 // dart's heat is roughly one dart-width — hits must be practically on top of
 // each other to build a hot spot, rather than "anywhere in the same segment".
-const BLOB_FRAC = 0.03;
+const DEFAULT_KERNEL = 0.03;
 
 interface Pt {
   x: number;
@@ -53,11 +54,13 @@ export function Heatmap({
   coords,
   mode = "ramp",
   scale = "absolute",
+  kernel = DEFAULT_KERNEL,
   size = 200,
 }: {
   coords: Pt[];
   mode?: HeatmapMode;
   scale?: HeatmapScale;
+  kernel?: number; // per-dart heat radius, fraction of the canvas
   size?: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -76,7 +79,7 @@ export function Heatmap({
     const R = px / 2 / 1.15; // margin so out-board darts still land inside
     const toX = (x: number) => c + x * R;
     const toY = (y: number) => c - y * R; // math y-up -> screen y-down
-    const blob = px * BLOB_FRAC;
+    const blob = px * kernel;
 
     ctx.clearRect(0, 0, px, px);
 
@@ -158,7 +161,7 @@ export function Heatmap({
     }
     hctx.putImageData(img, 0, 0);
     ctx.drawImage(heat, 0, 0);
-  }, [coords, mode, scale, size]);
+  }, [coords, mode, scale, kernel, size]);
 
   return <canvas ref={ref} className="heatmap__canvas" style={{ width: size, height: size }} />;
 }

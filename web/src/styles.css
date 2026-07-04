@@ -713,6 +713,8 @@ body {
   width: min(900px, 100%);
   display: flex;
   flex-direction: column;
+  /* Fixed-ish height so switching sections doesn't resize the dialog. */
+  height: min(760px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
 }
 .settings__head {
@@ -733,13 +735,38 @@ body {
   font-size: 1.1rem;
   cursor: pointer;
 }
+/* Left-nav sectioned layout: nav picks a section, body shows only that section. */
+.settings__main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.settings__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-right: 1px solid var(--panel-2);
+  min-width: 148px;
+  flex: none;
+}
 .settings__body {
-  padding: 8px 20px;
+  flex: 1;
+  padding: 8px 20px 16px;
   overflow: auto;
+  min-width: 0;
+}
+.settings__blurb {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 8px 0 0;
 }
 .settings__section {
   padding: 14px 0;
   border-bottom: 1px solid var(--panel-2);
+}
+.settings__section:last-child {
+  border-bottom: none;
 }
 .settings__section h3 {
   margin: 0 0 10px;
@@ -761,14 +788,6 @@ body {
   font-size: 0.85rem;
   margin: 8px 0 0;
 }
-.settings__toggle {
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0;
-}
 .settings__loading {
   padding: 20px;
 }
@@ -786,9 +805,13 @@ body {
   padding: 14px 20px;
   border-top: 1px solid var(--panel-2);
 }
+.settings__footmsg {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
 .settings__err {
   color: var(--bad);
-  margin-right: auto;
   font-size: 0.85rem;
 }
 
@@ -810,6 +833,11 @@ body {
 .field__suffix {
   color: var(--muted);
   font-size: 0.8rem;
+}
+.field__hint {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 .settings input,
 .settings select {
@@ -860,6 +888,125 @@ body {
 }
 .test.bad {
   color: var(--bad);
+}
+
+/* Section-nav buttons (override the generic .settings button look). */
+.settings__nav .settings__navbtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+}
+.settings__nav .settings__navbtn:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--text);
+  background: var(--panel-2);
+}
+.settings__nav .settings__navbtn--active {
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.settings__navicon {
+  font-size: 1rem;
+}
+
+/* Callouts: "applies instantly" (heatmap) and the advanced warning. */
+.settings__live {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(43, 213, 118, 0.12);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+.settings__warn {
+  color: #d9a441;
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+/* Heatmap grouping control: presets + slider beside a live preview. */
+.kernel {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.kernel__controls {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kernel__slider {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 320px;
+}
+.kernel__slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.kernel__ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.kernel__preview {
+  margin: 0;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.kernel__preview figcaption {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Narrow screens: the section nav becomes a horizontal strip above the body. */
+@media (max-width: 640px) {
+  .settings {
+    padding: 10px;
+  }
+  .settings__panel {
+    height: min(760px, calc(100vh - 20px));
+    max-height: calc(100vh - 20px);
+  }
+  .settings__main {
+    flex-direction: column;
+  }
+  .settings__nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--panel-2);
+    min-width: 0;
+    padding: 8px 10px;
+  }
+  .settings__nav .settings__navbtn {
+    flex: none;
+    padding: 6px 10px;
+  }
+  .settings__nav .settings__navbtn--active {
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .settings__body {
+    padding: 8px 14px 14px;
+  }
 }
 
 /* --- Live camera preview -------------------------------------------------- */

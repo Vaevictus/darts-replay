@@ -14,6 +14,7 @@ import {
   useSyncOffset,
   useHeatmapMode,
   useHeatmapScale,
+  useHeatmapKernel,
   useHeatmapStore,
 } from "./useConfig.js";
 import { useOverlay } from "./Overlay.js";
@@ -80,6 +81,7 @@ export function App() {
   const [heatmapOpen, setHeatmapOpen] = useState(true);
   const [heatMode, setHeatMode] = useHeatmapMode();
   const [heatScale, setHeatScale] = useHeatmapScale();
+  const [heatKernel, setHeatKernel] = useHeatmapKernel();
   const [resetArmed, triggerReset] = useConfirm();
   const { coords: storeCoords, ingest: ingestHeat, reset: resetHeat } = useHeatmapStore();
 
@@ -135,6 +137,15 @@ export function App() {
           onClose={() => {
             setSettingsOpen(false);
             reloadBoardCal();
+          }}
+          heat={{
+            mode: heatMode,
+            setMode: setHeatMode,
+            scale: heatScale,
+            setScale: setHeatScale,
+            kernel: heatKernel,
+            setKernel: setHeatKernel,
+            coords: heatCoords,
           }}
         />
       )}
@@ -209,7 +220,7 @@ export function App() {
               {heatCoords.length === 0 ? (
                 <p className="heatmap__empty">Throw to build your heatmap.</p>
               ) : (
-                <Heatmap coords={heatCoords} mode={heatMode} scale={heatScale} />
+                <Heatmap coords={heatCoords} mode={heatMode} scale={heatScale} kernel={heatKernel} />
               )}
             </div>
             <div className="heatmap__controls">

@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Redesigned Settings dialog** with a left-hand section nav (Camera, Board,
+  Replays, Heatmap, Sharing, Advanced, Status) that swaps the panel instead of one
+  long scroll, and plain-language labels + a helper line on every option (durations
+  shown in **seconds**, jargon like poll/encoder/ring buffer explained or tucked
+  under an Advanced warning). Collapses to a scrollable strip on narrow screens.
+- **Heatmap "grouping" control** — the per-dart heat radius is now tunable
+  (Tight / Standard / Loose presets + a Tighter↔Looser slider, framed as "how close
+  together must darts land to count as a group?") with a live preview of your own
+  darts. The relative/absolute scale is reworded as "My tightest group" vs "Only
+  real pile-ups". Persisted client-side; changes apply instantly.
+
 ### Changed
 - **Heatmap resolution & hotness.** The per-dart kernel was ~0.20 board-radii
   (≈33 mm), so darts anywhere in the same segment merged into a hot blob. Shrunk

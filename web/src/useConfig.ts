@@ -6,6 +6,7 @@ import { getConfig, getConfigCached, putConfig } from "./api.js";
 
 const HEAT_MODE_KEY = "darts-replay.heatmapMode";
 const HEAT_SCALE_KEY = "darts-replay.heatmapScale";
+const HEAT_KERNEL_KEY = "darts-replay.heatmapKernel";
 const HEAT_STORE_KEY = "darts-replay.heatmapStore";
 
 /** Heatmap color style (blue→red ramp vs orange glow), persisted in localStorage. */
@@ -22,6 +23,23 @@ export function useHeatmapScale() {
   return usePersistedState<HeatmapScale>(HEAT_SCALE_KEY, "absolute", (raw) =>
     raw === "relative" || raw === "absolute" ? raw : "absolute",
   );
+}
+
+// Per-dart heat-spot radius as a fraction of the canvas (see Heatmap.tsx). The
+// default ≈ one dart's width on a real board, so hits must be practically on top
+// of each other to build a hot spot. Clamped so the map can't degenerate into
+// invisible pinpricks or one giant blob.
+export const HEAT_KERNEL_DEFAULT = 0.03;
+export const HEAT_KERNEL_MIN = 0.015;
+export const HEAT_KERNEL_MAX = 0.06;
+
+/** Heatmap grouping tightness (per-dart heat-spot size), persisted in localStorage. */
+export function useHeatmapKernel() {
+  return usePersistedState<number>(HEAT_KERNEL_KEY, HEAT_KERNEL_DEFAULT, (raw) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return HEAT_KERNEL_DEFAULT;
+    return Math.min(HEAT_KERNEL_MAX, Math.max(HEAT_KERNEL_MIN, n));
+  });
 }
 
 type Coord = { x: number; y: number };

@@ -127,7 +127,7 @@ export function CameraPreview({ webcam, cal, onCalChange }: Props) {
           </>
         )}
       </div>
-      <p className="preview__hint">Recording is paused while this screen is open.</p>
+      <p className="preview__hint">Recording is paused while the camera view is open.</p>
     </div>
   );
 }
