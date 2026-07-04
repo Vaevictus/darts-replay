@@ -115,16 +115,25 @@ defaults are used. The two values you'll most likely need to change are **`webca
 | `webcam.width`/`height`/`fps` | `1280`/`720`/`30` | Capture resolution. |
 | `webcam.format` | `mjpeg` | V4L2 input format (`mjpeg`, `h264`, `yuyv422`). |
 | `webcam.encoder` | `x264` | `x264` (recommended), `copy` (only if the cam emits proper PTS), or `vaapi`. |
+| `webcam.rotation` | `0` | Rotate capture `0`/`90`/`180`/`270`° (portrait captures the full stance). |
+| `webcam.flipH` / `flipV` | `false` / `false` | Mirror horizontally / vertically. |
 | `recorder.segmentDir` | `/dev/shm/darts-replay/ring` | tmpfs ring (kept in RAM). |
 | `recorder.ringSeconds` | `90` | Ring buffer depth. |
 | `recorder.preRollMs` / `postRollMs` | `1200` / `1200` | Clip padding around the visit. |
 | `visit.thirdDartGraceMs` | `600` | Settle time before locking on the 3rd dart. |
 | `visit.collectTimeoutMs` | `4000` | Wait after you pull the darts before re-arming. |
 | `visit.inactivityTimeoutMs` | `12000` | Fallback finish if a visit stalls. |
-| `retainCount` | `12` | Visits/clips to keep. |
+| `retainCount` | `12` | Unsaved visits/clips to keep (saved visits are kept indefinitely). |
 | `server.port` | `8787` | HTTP/WebSocket port. |
+| `calibration.board` | — | On-video board overlay placement (`x`/`y`/`scale`/`rotation`/`opacity`). Set via Settings. |
+| `sharing.*` | — | Clip-sharing defaults + Streamable credentials. Set via Settings → Sharing. |
 
+Most of these are editable in the in-app **Settings** screen; `config.json` is written there too.
 Set `LOG_LEVEL=debug` for verbose server logs.
+
+> **Storage note:** ring segments live in RAM (`/dev/shm`) and unsaved clips are pruned to
+> `retainCount`, but **exported share files** (`var/share/`, or `/var/lib/darts-replay/share`) are
+> **not** auto-pruned — delete old exports there periodically if disk is tight.
 
 ## Commands
 

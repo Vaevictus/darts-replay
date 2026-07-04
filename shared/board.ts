@@ -48,7 +48,7 @@ export function toDarts(state: RawBoardState): Dart[] {
  * Diff two consecutive board snapshots into FSM signals.
  *
  * Detection rules:
- *  - New darts: `throws` grew (or numThrows increased) -> one DART per new entry.
+ *  - New darts: the `throws` array grew -> one DART per new entry.
  *  - Takeout: status classifies as takeout, OR the throw count dropped from >0
  *    to 0 (the board cleared after a visit).
  *  - Board idle/ready transitions are emitted on status-phase change.

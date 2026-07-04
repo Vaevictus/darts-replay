@@ -140,6 +140,11 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
   mkdirSync(shareDir, { recursive: true });
   void app.register(fastifyStatic, { root: shareDir, prefix: "/share/", decorateReply: false });
 
+  // Each share id is a full x264 re-encode; serialize jobs and cap the batch so a
+  // burst of /api/share posts can't pin a Pi-class CPU indefinitely.
+  const MAX_SHARE_IDS = 20;
+  let shareInFlight = false;
+
   // Built SPA (web/dist). Registered only if present (dev uses the vite server).
   const webDist = resolvePath("web/dist");
   if (existsSync(webDist)) {
@@ -157,7 +162,9 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
       if (!Number.isInteger(n) || n < 1) {
         return reply.code(400).send({ error: "limit must be a positive integer" });
       }
-      limit = Math.min(n, cfg.retainCount);
+      // Cap only to bound the response; saved visits beyond retainCount must stay
+      // reachable (they form the persistent reference-form library).
+      limit = Math.min(n, 2000);
     }
     return store.list(limit);
   });
@@ -185,7 +192,13 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     if (errors.length) return reply.code(400).send({ error: "invalid config", details: errors });
     // A blank Streamable password means "unchanged" — keep the stored one.
     if (patch.sharing?.streamable?.password === "") delete patch.sharing.streamable.password;
-    cfg = await saveConfig(patch);
+    try {
+      cfg = await saveConfig(patch);
+    } catch (err) {
+      // saveConfig refuses to overwrite a config file that exists but won't parse.
+      log.error("save config failed:", err);
+      return reply.code(409).send({ error: err instanceof Error ? err.message : "could not save config" });
+    }
     engine.updateConfig(cfg);
     broadcast({ type: "config", config: publicConfig(cfg) });
     return { config: publicConfig(cfg), note: "device/recorder changes take effect after a restart" };
@@ -201,10 +214,13 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     const body = req.body ?? {};
     const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === "string") : [];
     if (ids.length === 0) return reply.code(400).send({ error: "no clip ids" });
+    if (ids.length > MAX_SHARE_IDS) return reply.code(400).send({ error: `too many clips (max ${MAX_SHARE_IDS})` });
     const visits = ids.map((id) => store.get(id)).filter((v): v is Visit => !!v?.clipUrl);
     if (visits.length === 0) return reply.code(404).send({ error: "no matching clips with video" });
     const { options, errors } = validateShareOptions(body.options);
     if (errors.length) return reply.code(400).send({ error: "invalid options", details: errors });
+    if (shareInFlight) return reply.code(409).send({ error: "a share export is already in progress" });
+    shareInFlight = true;
     try {
       return await shareVisits({
         visits,
@@ -218,6 +234,8 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     } catch (err) {
       log.error("share failed:", err);
       return reply.code(500).send({ error: err instanceof Error ? err.message : "share failed" });
+    } finally {
+      shareInFlight = false;
     }
   });
 
@@ -229,7 +247,13 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
   // Test an autodarts board address — host/port from the body so the user can
   // verify a connection before saving it.
   app.post<{ Body: { host?: unknown; port?: unknown } }>("/api/board/test", async (req, reply) => {
-    const host = typeof req.body?.host === "string" && req.body.host ? req.body.host : cfg.board.host;
+    const rawHost = req.body?.host;
+    if (rawHost !== undefined && (typeof rawHost !== "string" || !/^[a-zA-Z0-9.-]+$/.test(rawHost))) {
+      // Reject anything that isn't a bare hostname/IP so the tested URL can't be
+      // steered elsewhere (path/query/credentials injection — SSRF-shaped).
+      return reply.code(400).send({ ok: false, error: "invalid host" });
+    }
+    const host = typeof rawHost === "string" && rawHost ? rawHost : cfg.board.host;
     const port = Number.isInteger(req.body?.port) ? (req.body!.port as number) : cfg.board.port;
     try {
       const res = await fetchWithTimeout(`http://${host}:${port}/api/state`, 2000);
@@ -287,10 +311,12 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
       log.error("cannot resolve a sendable socket:", socket?.constructor?.name, Object.keys(socket ?? {}));
       return;
     }
-    // Prime the new client with current state + recent visits.
+    // Prime the new client with current state + all persisted visits (the store
+    // is already pruned to saved ∪ newest-retainCount, so saved visits — the
+    // reference-form library — are included rather than clipped at retainCount).
     const s = engine.getState();
     ws.send(JSON.stringify({ type: "state", phase: s.phase, dartsCount: s.dartsCount, board: s.board, darts: s.darts }));
-    for (const v of store.list(cfg.retainCount).reverse()) {
+    for (const v of store.list().reverse()) {
       ws.send(JSON.stringify({ type: v.clipUrl ? "visit-ready" : "visit", visit: v }));
     }
   });

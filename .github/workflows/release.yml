@@ -63,7 +63,7 @@ jobs:
 
   # -------- attach the .debs to the GitHub Release --------
   release:
-    needs: [deb]
+    needs: [deb, image]   # a vX.Y.Z release should imply both the image and .debs exist
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -71,12 +71,17 @@ jobs:
           pattern: deb-*
           merge-multiple: true
           path: dist
-      - name: Create release and upload .debs
+      - name: Create or update release and upload .debs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            dist/*.deb
+          # Idempotent: a re-run (or a pre-created release) updates assets instead of failing.
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/*.deb
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              dist/*.deb
+          fi

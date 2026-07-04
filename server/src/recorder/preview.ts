@@ -126,8 +126,10 @@ export class CameraPreview {
       cleanup();
     });
     proc.on("exit", (code) => {
-      // 255 = SIGKILL from our own cleanup; not worth logging.
-      if (code && code !== 255) log.error(`preview ffmpeg exited (${code}).${stderr ? ` tail:\n${stderr}` : ""}`);
+      // Our own cleanup SIGKILLs the process, which yields code === null (the
+      // signal is set instead) — so any non-zero exit code is a real ffmpeg
+      // failure worth logging (incl. 255, common for immediate input errors).
+      if (code) log.error(`preview ffmpeg exited (${code}).${stderr ? ` tail:\n${stderr}` : ""}`);
       try {
         res.end();
       } catch {

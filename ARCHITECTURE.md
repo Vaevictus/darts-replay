@@ -17,18 +17,25 @@ shared/            pure, DOM-free, Node-testable — imported by BOTH server and
 server/src/        Node I/O tier
   index.ts           entrypoint: load config -> preflight -> build server -> listen
   preflight.ts       startup checks (platform, ffmpeg, camera device)
-  config.ts          load/merge/validate config; DEFAULT_CONFIG
+  config.ts          load/merge/validate config; DEFAULT_CONFIG; DARTS_ROOT/CONFIG/DATA paths
   log.ts             tiny leveled logger
+  fetch.ts           fetch with an abort-based timeout
+  ffmpeg.ts          runFfmpeg() + probeDims() (spawn/execFile wrappers)
+  cameras.ts         V4L2 camera enumeration + capabilities (Settings screen)
   engine.ts          orchestrator: adapter -> FSM -> effects (timers, clips), broadcast
+  share.ts           burn overlays into clips (resvg SVG + ffmpeg), stitch, upload
   board/adapter.ts   polls /api/state, diffs snapshots into FSM signals
   recorder/
     ring-buffer.ts   always-on ffmpeg capture into 1s tmpfs segments
     extract.ts       stream-copy concat of segments -> visit clip
+    filters.ts       shared ffmpeg orientation (-vf) chain (record + preview)
+    preview.ts       live MJPEG preview (pauses recording; idle watchdog)
   store/visits.ts    in-memory + JSON index, retention/pruning
-  server.ts          Fastify: REST + /ws + static clips/SPA
+  server.ts          Fastify: REST + /ws + static clips/share/SPA
 
 web/src/           React SPA
-  main.tsx, App.tsx, useReplay.ts (WS client), Dartboard.tsx, ErrorBoundary.tsx
+  main.tsx, App.tsx, useReplay.ts (WS client), Dartboard.tsx, Overlay.tsx,
+  Settings.tsx, ShareDialog.tsx, api.ts, ErrorBoundary.tsx
 ```
 
 `shared/` has **no** imports of `react`, `window`, `document`, or Node I/O modules — it is the

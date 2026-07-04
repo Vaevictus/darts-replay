@@ -1,8 +1,11 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rename } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { Config } from "@shared/types.js";
+import { logger } from "./log.js";
+
+const log = logger("config");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -211,28 +214,68 @@ export function validateConfigPatch(input: unknown): { patch: ConfigPatch; error
   return { patch, errors };
 }
 
+function isMissing(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException)?.code === "ENOENT";
+}
+
+/** Warn once, loudly, that the config is unusable so it can't be lost silently. */
+function warnMalformed(err: unknown): void {
+  log.error(
+    `config at ${CONFIG_PATH} is malformed and was ignored — using defaults. ` +
+      `Fix the JSON and restart; the file will NOT be overwritten by saves until it parses. ` +
+      `(${(err as Error).message})`,
+  );
+}
+
 export function loadConfigSync(): Config {
   if (!existsSync(CONFIG_PATH)) return DEFAULT_CONFIG;
   try {
     return merge(DEFAULT_CONFIG, JSON.parse(readFileSync(CONFIG_PATH, "utf8")));
-  } catch {
+  } catch (err) {
+    warnMalformed(err);
     return DEFAULT_CONFIG;
   }
 }
 
 export async function loadConfig(): Promise<Config> {
+  let raw: string;
   try {
-    const raw = await readFile(CONFIG_PATH, "utf8");
+    raw = await readFile(CONFIG_PATH, "utf8");
+  } catch (err) {
+    if (isMissing(err)) return DEFAULT_CONFIG; // no config yet — defaults are expected
+    throw err; // an unexpected IO error should surface, not masquerade as defaults
+  }
+  try {
     return merge(DEFAULT_CONFIG, JSON.parse(raw));
-  } catch {
+  } catch (err) {
+    warnMalformed(err);
     return DEFAULT_CONFIG;
   }
 }
 
 export async function saveConfig(patch: ConfigPatch): Promise<Config> {
-  const current = await loadConfig();
+  // Read the current file directly so we never overwrite a config that exists
+  // but fails to parse — a stray syntax error must not silently wipe the user's
+  // camera setup and Streamable credentials with defaults+patch.
+  let current: Config = DEFAULT_CONFIG;
+  let existing: string | null = null;
+  try {
+    existing = await readFile(CONFIG_PATH, "utf8");
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+  }
+  if (existing !== null) {
+    try {
+      current = merge(DEFAULT_CONFIG, JSON.parse(existing));
+    } catch (err) {
+      throw new Error(`refusing to overwrite malformed config at ${CONFIG_PATH}: ${(err as Error).message}`);
+    }
+  }
   const next = merge(current, patch);
-  await writeFile(CONFIG_PATH, JSON.stringify(next, null, 2) + "\n", "utf8");
+  // Atomic write: a crash mid-write can't leave a truncated/corrupt config.
+  const tmp = `${CONFIG_PATH}.tmp`;
+  await writeFile(tmp, JSON.stringify(next, null, 2) + "\n", "utf8");
+  await rename(tmp, CONFIG_PATH);
   return next;
 }
 

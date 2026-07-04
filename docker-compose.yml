@@ -30,6 +30,8 @@ services:
       - /dev/video6:/dev/video6
     # Rootless device access: you must be in the host `video` group. Passing the
     # group through keeps your video membership inside the container.
+    # NOTE: `keep-groups` is podman-specific. On Docker, delete it and instead put
+    # your host video GID here (find it with `getent group video`), e.g. `- "44"`.
     group_add:
       - keep-groups
 

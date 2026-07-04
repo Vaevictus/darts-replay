@@ -40,6 +40,8 @@ export class Engine {
     this.cfg = cfg;
     this.store = store;
     this.broadcast = broadcast;
+    // Continue visit numbering across restarts (persisted visits keep their seq).
+    this.state = { ...this.state, seq: store.maxSeq() };
     this.ring = new RingBuffer(cfg);
     this.preview = new CameraPreview(() => this.cfg, this.ring);
     this.adapter = this.makeAdapter();

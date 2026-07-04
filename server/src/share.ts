@@ -10,10 +10,15 @@ import { join, basename } from "node:path";
 import { buildBoardSvg } from "@shared/dartboard.js";
 import type { Config, OverlayConfig, ShareOptions, ShareResult, ShareLink, Visit } from "@shared/types.js";
 import { runFfmpeg, probeDims } from "./ffmpeg.js";
+import { fetchWithTimeout } from "./fetch.js";
 import { logger } from "./log.js";
 
 const log = logger("share");
 type BoardCal = Config["calibration"]["board"];
+
+// Uploads can be large on a slow uplink; generous ceiling so a wedged upload
+// can't hang the /api/share request (and the UI's "Encoding…" state) forever.
+const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 const GUIDE_COLOR = "#2bd576"; // overlay accent green
 
@@ -117,7 +122,7 @@ async function uploadCatbox(path: string): Promise<string> {
   const fd = new FormData();
   fd.append("reqtype", "fileupload");
   fd.append("fileToUpload", new Blob([await readFile(path)], { type: "video/mp4" }), basename(path));
-  const res = await fetch("https://catbox.moe/user/api.php", { method: "POST", body: fd });
+  const res = await fetchWithTimeout("https://catbox.moe/user/api.php", UPLOAD_TIMEOUT_MS, { method: "POST", body: fd });
   const text = (await res.text()).trim();
   if (!res.ok || !/^https?:\/\//.test(text)) throw new Error(`catbox failed: ${text.slice(0, 200) || res.status}`);
   return text;
@@ -128,7 +133,7 @@ async function uploadStreamable(path: string, creds: { email: string; password: 
   const fd = new FormData();
   fd.append("file", new Blob([await readFile(path)], { type: "video/mp4" }), basename(path));
   const auth = Buffer.from(`${creds.email}:${creds.password}`).toString("base64");
-  const res = await fetch("https://api.streamable.com/upload", {
+  const res = await fetchWithTimeout("https://api.streamable.com/upload", UPLOAD_TIMEOUT_MS, {
     method: "POST",
     headers: { Authorization: `Basic ${auth}`, "User-Agent": "darts-replay" },
     body: fd,
@@ -155,40 +160,54 @@ export async function shareVisits(input: ShareInput): Promise<ShareResult> {
   const stamp = Date.now();
   const stitching = options.multi === "stitch" && visits.length > 1;
 
-  const burned: string[] = [];
-  for (const [i, v] of visits.entries()) {
-    const clip = clipPathFor(v.id);
-    const { width, height } = await probeDims(clip);
-    const pngPath = join(shareDir, `.ov_${stamp}_${i}.png`);
-    await writeFile(pngPath, rasterize(buildOverlaySvg(width, height, v, cal, guides, options)));
-    const out = join(shareDir, stitching ? `.part_${stamp}_${i}.mp4` : `share_${v.id}_${stamp}.mp4`);
-    await burnClip(clip, pngPath, out);
-    await unlink(pngPath).catch(() => {});
-    burned.push(out);
-  }
+  const overlays: string[] = []; // temp PNGs — always removed
+  const parts: string[] = []; // stitch intermediates — always removed (never a deliverable)
+  const outputs: string[] = []; // separate-mode deliverables — removed only on failure
+  let finalOut: string | null = null; // stitched deliverable
+  let ok = false;
+  try {
+    for (const [i, v] of visits.entries()) {
+      const clip = clipPathFor(v.id);
+      const { width, height } = await probeDims(clip);
+      const pngPath = join(shareDir, `.ov_${stamp}_${i}.png`);
+      overlays.push(pngPath);
+      await writeFile(pngPath, rasterize(buildOverlaySvg(width, height, v, cal, guides, options)));
+      const out = join(shareDir, stitching ? `.part_${stamp}_${i}.mp4` : `share_${v.id}_${stamp}.mp4`);
+      (stitching ? parts : outputs).push(out);
+      await burnClip(clip, pngPath, out);
+    }
 
-  let files: string[];
-  if (stitching) {
-    const finalOut = join(shareDir, `share_${stamp}.mp4`);
-    await stitch(burned, finalOut);
-    for (const p of burned) await unlink(p).catch(() => {});
-    files = [finalOut];
-  } else {
-    files = burned;
-  }
+    let files: string[];
+    if (stitching) {
+      finalOut = join(shareDir, `share_${stamp}.mp4`);
+      await stitch(parts, finalOut);
+      files = [finalOut];
+    } else {
+      files = outputs;
+    }
 
-  const links: ShareLink[] = [];
-  if (options.host !== "none") {
-    for (const f of files) {
-      try {
-        const url = options.host === "catbox" ? await uploadCatbox(f) : await uploadStreamable(f, streamable);
-        links.push({ host: options.host, url });
-      } catch (err) {
-        log.error(`upload to ${options.host} failed:`, err);
-        links.push({ host: options.host, url: "", error: err instanceof Error ? err.message : "upload failed" });
+    const links: ShareLink[] = [];
+    if (options.host !== "none") {
+      for (const f of files) {
+        try {
+          const url = options.host === "catbox" ? await uploadCatbox(f) : await uploadStreamable(f, streamable);
+          links.push({ host: options.host, url });
+        } catch (err) {
+          log.error(`upload to ${options.host} failed:`, err);
+          links.push({ host: options.host, url: "", error: err instanceof Error ? err.message : "upload failed" });
+        }
       }
     }
-  }
 
-  return { files: files.map((f) => `/share/${basename(f)}`), links };
+    ok = true;
+    return { files: files.map((f) => `/share/${basename(f)}`), links };
+  } finally {
+    // Overlay PNGs and stitch parts are never deliverables — always clean them.
+    // On failure, also remove any partial deliverables we produced.
+    for (const p of [...overlays, ...parts]) await unlink(p).catch(() => {});
+    if (!ok) {
+      for (const p of outputs) await unlink(p).catch(() => {});
+      if (finalOut) await unlink(finalOut).catch(() => {});
+    }
+  }
 }

@@ -43,7 +43,11 @@ npm run build
 
 echo ">> Installing production dependencies (arch-native)"
 cp package.json package-lock.json "$APP/"
-( cd "$APP" && npm ci --omit=dev --no-audit --no-fund && npm cache clean --force >/dev/null 2>&1 || true )
+(
+  cd "$APP"
+  npm ci --omit=dev --no-audit --no-fund   # must succeed; set -e aborts on failure
+  npm cache clean --force >/dev/null 2>&1 || true
+)
 
 echo ">> Staging application files"
 cp -r server shared "$APP/"

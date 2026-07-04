@@ -5,7 +5,15 @@ config in `~/.config/darts-replay` and clips/data in `~/.local/share/darts-repla
 
 ## Prerequisites
 
-- **podman** installed (rootless works out of the box on modern distros).
+- **podman** installed. Rootless podman also needs the **`uidmap`** package
+  (`newuidmap`/`newgidmap` — without them `podman info` fails and containers won't
+  start), plus subuid/subgid ranges for your user (`/etc/subuid`, `/etc/subgid`).
+  Both are **root** (`apt`) installs done once:
+  ```sh
+  sudo apt install podman uidmap
+  ```
+  If you can't get root on your box, this path (and the `.deb`) won't work — use
+  the **From source** install (README §Develop / INSTALL §3); it needs no root.
 - Your user is in the **`video`** group (for camera access):
   ```sh
   sudo usermod -aG video "$USER"    # log out/in afterwards

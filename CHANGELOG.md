@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-04
+
+### Fixed
+- **The `.deb` no longer crash-loops on first start.** The ring buffer tried to
+  `mkdir` a relative `clipDir` under the read-only `/opt` install root; the clips
+  dir is created by the visit store (correctly resolved) instead.
+- **Saved visits ("reference-form library") stay visible.** New clients were primed
+  with only the newest `retainCount` visits, so saved visits scrolled out of view;
+  the WS prime and `/api/visits` now surface all persisted visits.
+- **`vaapi` recordings keep their rotation/flip.** Orientation and the vaapi
+  `format=nv12,hwupload` were emitted as two `-vf` args (ffmpeg honors only the
+  last), silently dropping orientation; they're now merged into one filter chain.
+- **`.deb` upgrades restart the service** (`try-restart` in `postinst`), so an
+  `apt` upgrade no longer leaves the recorder silently stopped.
+- **A malformed `config.json` is never silently overwritten.** Parse errors are
+  logged loudly and `saveConfig` refuses to clobber an unparseable file (which
+  previously replaced the user's camera setup + Streamable credentials with defaults).
+- Ring-buffer respawn timer is cancelled on stop/restart (prevents an orphaned
+  second ffmpeg fighting over the camera during a preview open/close race).
+- Share exports clean up overlay PNGs and stitch intermediates even on failure;
+  uploads have a 5-minute timeout so a wedged upload can't hang the request.
+- Visit numbers continue across restarts (the FSM seq is seeded from the store).
+- Container runs the app as PID 1 (`node …` not `npm start`) for clean SIGTERM
+  shutdown; atomic writes for `config.json` and the visits index; `/api/board/test`
+  validates the host; `/api/share` caps the batch and serializes jobs; Settings
+  number fields no longer snap to `0` while being edited.
+
+### Changed
+- `react`/`react-dom` moved to devDependencies (build-only) — slims the container
+  image and `.deb` runtime. `engines.node` corrected to `^20.19 || >=22.12` (Vite 7).
+- Docs: install methods now state which need root and that rootless podman needs the
+  `uidmap` package; README config table and ARCHITECTURE module graph refreshed; a
+  storage note documents that `share/` exports are not auto-pruned.
+
 ## [0.2.0] - 2026-07-04
 
 ### Added
@@ -79,6 +113,7 @@ Initial release.
 - REST + WebSocket API, configurable via `config.json`.
 - Startup preflight checks (platform, ffmpeg, camera) and a leveled logger.
 
-[Unreleased]: https://github.com/Vaevictus/darts-replay/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Vaevictus/darts-replay/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Vaevictus/darts-replay/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Vaevictus/darts-replay/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Vaevictus/darts-replay/releases/tag/v0.1.0

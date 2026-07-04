@@ -3,11 +3,15 @@
 darts-replay is **Linux-only** (it uses V4L2 capture, a `/dev/shm` tmpfs ring
 buffer and `ffmpeg`). Pick whichever install suits you:
 
-| Method | Best for | Auto-start |
-| --- | --- | --- |
-| [**`.deb` package**](#1-deb-package-debianubuntu) | Debian/Ubuntu boxes | system service |
-| [**Container** (rootless podman)](#2-container-rootless-podman) | reproducible, no host Node | user service |
-| [**From source**](#3-from-source) | development / other distros | manual / user service |
+| Method | Best for | Auto-start | Needs root? |
+| --- | --- | --- | --- |
+| [**`.deb` package**](#1-deb-package-debianubuntu) | Debian/Ubuntu boxes | system service | **Yes** (`apt install`) |
+| [**Container** (rootless podman)](#2-container-rootless-podman) | reproducible, no host Node | user service | **Yes**, once — to install `podman`+`uidmap` |
+| [**From source**](#3-from-source) | dev / locked-down appliances | manual / user service | **No** |
+
+> **On a locked-down appliance with no `sudo`/`apt`?** Only **[From source](#3-from-source)**
+> works — it needs no root and no container runtime. The `.deb` and container paths both
+> require root at least once to install packages.
 
 All three need a **spare V4L2 webcam** *separate from the cameras Autodarts uses
 for detection* (V4L2 devices can't be shared between two processes), and a running

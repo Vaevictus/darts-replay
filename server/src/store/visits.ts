@@ -1,10 +1,13 @@
 // In-memory visit index with JSON persistence and clip retention. Survives a
 // service restart so the gallery isn't empty after a bounce.
 
-import { readFileSync, existsSync, mkdirSync } from "node:fs";
-import { writeFile, unlink } from "node:fs/promises";
+import { readFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
+import { writeFile, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { Visit } from "@shared/types.js";
+import { logger } from "../log.js";
+
+const log = logger("store");
 
 export class VisitStore {
   private visits: Visit[] = []; // newest first
@@ -26,13 +29,29 @@ export class VisitStore {
     try {
       const data = JSON.parse(readFileSync(this.indexPath, "utf8")) as Visit[];
       if (Array.isArray(data)) this.visits = data;
-    } catch {
-      /* start clean if the index is corrupt */
+    } catch (err) {
+      // Don't silently discard a corrupt index (it may hold the saved library).
+      // Preserve it for recovery, warn loudly, then start clean.
+      const backup = `${this.indexPath}.corrupt`;
+      try {
+        renameSync(this.indexPath, backup);
+      } catch {
+        /* best-effort backup */
+      }
+      log.error(`visits index at ${this.indexPath} is corrupt; backed up to ${backup} and starting clean. (${(err as Error).message})`);
     }
   }
 
   private async persist(): Promise<void> {
-    await writeFile(this.indexPath, JSON.stringify(this.visits, null, 2), "utf8").catch(() => {});
+    // Atomic write so a crash mid-write can't corrupt the index (which would
+    // otherwise cost the persistent saved-visit library on next boot).
+    const tmp = `${this.indexPath}.tmp`;
+    try {
+      await writeFile(tmp, JSON.stringify(this.visits, null, 2), "utf8");
+      await rename(tmp, this.indexPath);
+    } catch (err) {
+      log.error(`failed to persist visits index: ${(err as Error).message}`);
+    }
   }
 
   list(limit?: number): Visit[] {
@@ -45,6 +64,12 @@ export class VisitStore {
 
   latest(): Visit | undefined {
     return this.visits[0];
+  }
+
+  /** Highest visit sequence number persisted (0 if none) — used to seed the FSM
+   * counter on boot so visit numbers don't restart at #1 after a bounce. */
+  maxSeq(): number {
+    return this.visits.reduce((m, v) => Math.max(m, v.seq), 0);
   }
 
   clipPath(id: string): string {

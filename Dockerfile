@@ -49,4 +49,7 @@ EXPOSE 8787
 
 # The ring buffer wants a roomy /dev/shm; the recorder falls back gracefully but
 # give it space via --shm-size (compose sets shm_size: 256m).
-CMD ["npm", "start"]
+#
+# Exec node directly (not `npm start`) so the app is PID 1 and receives SIGTERM
+# for a clean shutdown (stops ffmpeg/adapter) instead of npm swallowing the signal.
+CMD ["node", "node_modules/tsx/dist/cli.mjs", "server/src/index.ts"]

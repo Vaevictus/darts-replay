@@ -37,7 +37,12 @@ function NumberField({
           value={value}
           min={min}
           step={step ?? 1}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(e) => {
+            // Ignore transient empty/invalid input (Number("") === 0) so clearing
+            // the field to retype doesn't snap the value to 0 (and 400 on save).
+            const n = e.target.valueAsNumber;
+            if (!Number.isNaN(n)) onChange(n);
+          }}
         />
         {suffix && <span className="field__suffix">{suffix}</span>}
       </span>

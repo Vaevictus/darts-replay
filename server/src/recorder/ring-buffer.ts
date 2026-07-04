@@ -9,7 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "@shared/types.js";
-import { videoFilters } from "./filters.js";
+import { orientationChain, vfArgs } from "./filters.js";
 import { logger } from "../log.js";
 
 const log = logger("ring");
@@ -27,6 +27,7 @@ export class RingBuffer {
   private cfg: Config;
   private proc: ChildProcess | null = null;
   private prune: NodeJS.Timeout | null = null;
+  private retryTimer: NodeJS.Timeout | null = null;
   private stopped = false;
   private now: () => number;
 
@@ -37,10 +38,19 @@ export class RingBuffer {
 
   start(): void {
     this.stopped = false;
+    this.clearRetry();
+    // Only the segment dir is ours to create; the clips dir is owned/created by
+    // VisitStore (and may live on a read-only-adjacent path under packaged installs).
     mkdirSync(this.cfg.recorder.segmentDir, { recursive: true });
-    mkdirSync(this.cfg.recorder.clipDir, { recursive: true });
     this.spawnFfmpeg();
     this.prune = setInterval(() => this.pruneOld(), 2000);
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
   }
 
   stop(): void {
@@ -51,6 +61,7 @@ export class RingBuffer {
    * is released before another consumer (the live preview) opens it. */
   stopAndWait(): Promise<void> {
     this.stopped = true;
+    this.clearRetry();
     if (this.prune) {
       clearInterval(this.prune);
       this.prune = null;
@@ -94,61 +105,9 @@ export class RingBuffer {
     }
   }
 
-  private ffmpegArgs(): string[] {
-    const { webcam, recorder } = this.cfg;
-    const input = [
-      "-nostdin",
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-f",
-      "v4l2",
-      "-input_format",
-      webcam.format,
-      "-video_size",
-      `${webcam.width}x${webcam.height}`,
-      "-framerate",
-      String(webcam.fps),
-      "-i",
-      webcam.device,
-    ];
-    let codec: string[];
-    if (webcam.encoder === "copy") {
-      codec = ["-c", "copy"];
-    } else if (webcam.encoder === "vaapi") {
-      codec = [
-        "-vaapi_device",
-        "/dev/dri/renderD128",
-        "-vf",
-        "format=nv12,hwupload",
-        "-c:v",
-        "h264_vaapi",
-        "-g",
-        String(webcam.fps),
-      ];
-    } else {
-      codec = ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-g", String(webcam.fps)];
-    }
-    const output = [
-      "-f",
-      "segment",
-      "-segment_time",
-      String(recorder.segmentSeconds),
-      "-reset_timestamps",
-      "1",
-      "-segment_format",
-      "mpegts",
-      // ffmpeg writes the segment's start wall-clock (epoch seconds) into the name.
-      "-strftime",
-      "1",
-      join(recorder.segmentDir, "seg_%s.ts"),
-    ];
-    return [...input, ...videoFilters(webcam), ...codec, ...output];
-  }
-
   private spawnFfmpeg(): void {
     if (this.stopped) return;
-    const proc = spawn("ffmpeg", this.ffmpegArgs(), { stdio: ["ignore", "ignore", "pipe"] });
+    const proc = spawn("ffmpeg", captureArgs(this.cfg), { stdio: ["ignore", "ignore", "pipe"] });
     this.proc = proc;
     let stderr = "";
     let restarted = false;
@@ -156,7 +115,14 @@ export class RingBuffer {
       if (this.stopped || restarted) return;
       restarted = true;
       log.error(`ffmpeg ${reason}; restarting in 2s.${stderr ? ` tail:\n${stderr}` : ""}`);
-      setTimeout(() => this.spawnFfmpeg(), 2000);
+      // Track the timer so stopAndWait()/start() can cancel a pending respawn —
+      // otherwise a preview open/close in the 2s window can spawn a second ffmpeg
+      // that fights over the V4L2 device (EBUSY loop, orphaned capture).
+      this.clearRetry();
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        this.spawnFfmpeg();
+      }, 2000);
     };
     proc.stderr?.on("data", (b) => {
       stderr = (stderr + b.toString()).slice(-2000);
@@ -225,4 +191,76 @@ export class RingBuffer {
     }
     return total;
   }
+}
+
+/**
+ * Build the capture ffmpeg args for a config. Pure and exported for testing.
+ *
+ * The orientation chain and any encoder-specific filters must share a SINGLE
+ * `-vf` — ffmpeg honors only the last `-vf` per stream, so a separate
+ * orientation `-vf` next to vaapi's `format=nv12,hwupload` would be silently
+ * dropped (recordings unrotated while the preview shows them rotated). For
+ * vaapi the CPU-side transpose/flip must precede `hwupload`.
+ */
+export function captureArgs(cfg: Config): string[] {
+  const { webcam, recorder } = cfg;
+  const input = [
+    "-nostdin",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-f",
+    "v4l2",
+    "-input_format",
+    webcam.format,
+    "-video_size",
+    `${webcam.width}x${webcam.height}`,
+    "-framerate",
+    String(webcam.fps),
+    "-i",
+    webcam.device,
+  ];
+  // "copy" can't filter (raw packets); others apply the orientation chain.
+  const orient = webcam.encoder === "copy" ? [] : orientationChain(webcam);
+  let enc: string[];
+  if (webcam.encoder === "copy") {
+    enc = ["-c", "copy"];
+  } else if (webcam.encoder === "vaapi") {
+    enc = [
+      "-vaapi_device",
+      "/dev/dri/renderD128",
+      ...vfArgs([...orient, "format=nv12", "hwupload"]),
+      "-c:v",
+      "h264_vaapi",
+      "-g",
+      String(webcam.fps),
+    ];
+  } else {
+    enc = [
+      ...vfArgs(orient),
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-pix_fmt",
+      "yuv420p",
+      "-g",
+      String(webcam.fps),
+    ];
+  }
+  const output = [
+    "-f",
+    "segment",
+    "-segment_time",
+    String(recorder.segmentSeconds),
+    "-reset_timestamps",
+    "1",
+    "-segment_format",
+    "mpegts",
+    // ffmpeg writes the segment's start wall-clock (epoch seconds) into the name.
+    "-strftime",
+    "1",
+    join(recorder.segmentDir, "seg_%s.ts"),
+  ];
+  return [...input, ...enc, ...output];
 }

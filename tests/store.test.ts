@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { VisitStore, validateVisitPatch } from "../server/src/store/visits.js";
@@ -63,6 +63,24 @@ describe("VisitStore", () => {
     await a.add(visit(7));
     const b = new VisitStore(varDir, clipDir, 10);
     expect(b.get(visit(7).id)?.seq).toBe(7);
+  });
+
+  it("reports the max persisted seq (to seed the FSM counter across restarts)", async () => {
+    const store = new VisitStore(varDir, clipDir, 10);
+    expect(store.maxSeq()).toBe(0);
+    await store.add(visit(3));
+    await store.add(visit(7));
+    await store.add(visit(5));
+    expect(store.maxSeq()).toBe(7);
+  });
+
+  it("backs up a corrupt index instead of discarding it, then starts clean", () => {
+    mkdirSync(varDir, { recursive: true });
+    writeFileSync(join(varDir, "visits.json"), "{ this is not json");
+    // constructor loads the (corrupt) index
+    const store = new VisitStore(varDir, clipDir, 10);
+    expect(store.list()).toEqual([]);
+    expect(existsSync(join(varDir, "visits.json.corrupt"))).toBe(true);
   });
 
   it("keeps saved visits beyond retainCount while still pruning unsaved ones", async () => {
