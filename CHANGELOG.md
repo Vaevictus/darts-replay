@@ -7,11 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- **Redesigned Settings dialog** with a left-hand section nav (Camera, Board,
-  Replays, Heatmap, Sharing, Advanced, Status) that swaps the panel instead of one
-  long scroll, and plain-language labels + a helper line on every option (durations
-  shown in **seconds**, jargon like poll/encoder/ring buffer explained or tucked
-  under an Advanced warning). Collapses to a scrollable strip on narrow screens.
+- **Redesigned Settings as a dedicated full-screen page** (no longer a modal
+  dialog) with a left-hand section nav (Camera, Board, Replays, Heatmap, Sharing,
+  Advanced, Status) that swaps the panel instead of one long scroll, a "← Back"
+  header, and plain-language labels + a helper line on every option (durations shown
+  in **seconds**, jargon like poll/encoder/ring buffer explained or tucked under an
+  Advanced warning). Collapses to a scrollable nav strip on narrow screens. (The
+  Share dialog stays a modal.)
 - **Heatmap "grouping" control** — the per-dart heat radius is now tunable
   (Tight / Standard / Loose presets + a Tighter↔Looser slider, framed as "how close
   together must darts land to count as a group?") with a live preview of your own

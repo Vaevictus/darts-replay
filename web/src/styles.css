@@ -695,6 +695,8 @@ body {
   border-color: var(--accent);
 }
 
+/* Base .settings = modal overlay. Still used by the Share dialog. The config
+   Settings screen adds .settings--screen (below) to become a full-page view. */
 .settings {
   position: fixed;
   inset: 0;
@@ -713,7 +715,7 @@ body {
   width: min(900px, 100%);
   display: flex;
   flex-direction: column;
-  /* Fixed-ish height so switching sections doesn't resize the dialog. */
+  /* Fixed-ish height so switching sections doesn't resize the panel. */
   height: min(760px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
 }
@@ -723,6 +725,7 @@ body {
   justify-content: space-between;
   padding: 14px 20px;
   border-bottom: 1px solid var(--panel-2);
+  flex: none;
 }
 .settings__head h2 {
   margin: 0;
@@ -734,6 +737,34 @@ body {
   color: var(--muted);
   font-size: 1.1rem;
   cursor: pointer;
+}
+.settings__back {
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+/* Dedicated full-screen config view: no dim backdrop, a centred full-height
+   content column, header/footer pinned and only the body scrolling. */
+.settings--screen {
+  position: static;
+  background: var(--bg);
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: stretch;
+}
+.settings--screen .settings__panel {
+  border-top: none;
+  border-bottom: none;
+  border-radius: 0;
+  width: min(1000px, 100%);
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+}
+.settings--screen .settings__head {
+  justify-content: flex-start;
+  gap: 14px;
 }
 /* Left-nav sectioned layout: nav picks a section, body shows only that section. */
 .settings__main {
@@ -979,10 +1010,11 @@ body {
 
 /* Narrow screens: the section nav becomes a horizontal strip above the body. */
 @media (max-width: 640px) {
-  .settings {
+  /* Share dialog (still a modal) — tighter on small screens. */
+  .settings:not(.settings--screen) {
     padding: 10px;
   }
-  .settings__panel {
+  .settings:not(.settings--screen) .settings__panel {
     height: min(760px, calc(100vh - 20px));
     max-height: calc(100vh - 20px);
   }

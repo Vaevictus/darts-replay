@@ -284,10 +284,15 @@ export function Settings({ onClose, heat }: { onClose: () => void; heat: Heatmap
 
   if (!draft) {
     return (
-      <div className="settings">
+      <div className="settings settings--screen">
         <div className="settings__panel">
+          <header className="settings__head">
+            <button className="settings__back" onClick={onClose}>
+              ← Back
+            </button>
+            <h2>⚙ Settings</h2>
+          </header>
           <p className="settings__loading">{error ? `Error: ${error}` : "Loading settings…"}</p>
-          <button onClick={onClose}>Close</button>
         </div>
       </div>
     );
@@ -715,13 +720,13 @@ export function Settings({ onClose, heat }: { onClose: () => void; heat: Heatmap
   const meta = SECTIONS.find((s) => s.id === section)!;
 
   return (
-    <div className="settings" role="dialog" aria-modal="true" aria-label="Settings">
+    <div className="settings settings--screen" aria-label="Settings">
       <div className="settings__panel">
         <header className="settings__head">
-          <h2>⚙ Settings</h2>
-          <button className="settings__x" onClick={onClose} aria-label="Close">
-            ✕
+          <button className="settings__back" onClick={onClose}>
+            ← Back
           </button>
+          <h2>⚙ Settings</h2>
         </header>
 
         <div className="settings__main">
@@ -757,7 +762,7 @@ export function Settings({ onClose, heat }: { onClose: () => void; heat: Heatmap
           <button className="primary" onClick={onSave} disabled={!dirty || saving}>
             {saving ? "Saving…" : "Save changes"}
           </button>
-          <button onClick={onClose}>Close</button>
+          <button onClick={onClose}>Done</button>
         </footer>
       </div>
     </div>

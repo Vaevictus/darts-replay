@@ -118,6 +118,27 @@ export function App() {
   const toggleShare = (v: Visit) =>
     setShareIds((ids) => (ids.includes(v.id) ? ids.filter((x) => x !== v.id) : [...ids, v.id]));
 
+  // Settings is a dedicated full-screen view, not a modal over the app.
+  if (settingsOpen) {
+    return (
+      <Settings
+        onClose={() => {
+          setSettingsOpen(false);
+          reloadBoardCal();
+        }}
+        heat={{
+          mode: heatMode,
+          setMode: setHeatMode,
+          scale: heatScale,
+          setScale: setHeatScale,
+          kernel: heatKernel,
+          setKernel: setHeatKernel,
+          coords: heatCoords,
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -131,24 +152,6 @@ export function App() {
           </button>
         </div>
       </header>
-
-      {settingsOpen && (
-        <Settings
-          onClose={() => {
-            setSettingsOpen(false);
-            reloadBoardCal();
-          }}
-          heat={{
-            mode: heatMode,
-            setMode: setHeatMode,
-            scale: heatScale,
-            setScale: setHeatScale,
-            kernel: heatKernel,
-            setKernel: setHeatKernel,
-            coords: heatCoords,
-          }}
-        />
-      )}
 
       <section className="stage">
         {compareOpen && cmp.length === 2 ? (
