@@ -151,7 +151,12 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
     void app.register(fastifyStatic, { root: webDist, prefix: "/", decorateReply: false });
   }
 
-  app.get("/api/health", async () => ({ ok: true, ...engine.getState() }));
+  // ok reflects real health: the capture ring is producing fresh segments, or
+  // recording is intentionally paused for the live preview (not a fault).
+  app.get("/api/health", async () => {
+    const state = engine.getState();
+    return { ok: state.ringHealthy || state.previewing, ...state };
+  });
 
   app.get("/api/state", async () => engine.getState());
 

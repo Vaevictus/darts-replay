@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- Clients now drop a visit card the moment its clip is pruned (a `visit-removed`
+  WS frame), instead of leaving a card whose `/clips/…` 404s until reload; the
+  player also stops if the clip it was showing is pruned.
+- `/api/health` `ok` now reflects real health (capture ring producing segments,
+  or intentionally paused for preview) rather than being a hard-coded `true`.
+
+### Changed
+- `ConfigPatch` is defined once in `shared/types.ts` and imported by both the
+  server and the web client (was duplicated, and the web copy couldn't express
+  the two-level `calibration.board` / `sharing.streamable` nesting).
+- The two startup `/api/config` reads (`useFps`, `useBoardCalibration`) share one
+  cached fetch; the cache is invalidated on save so post-save reads are fresh.
+
 ## [0.2.1] - 2026-07-04
 
 ### Fixed

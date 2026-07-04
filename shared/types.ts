@@ -112,6 +112,19 @@ export interface Config {
   };
 }
 
+/** A config patch that may override whole sections or individual nested fields.
+ * Shared by the server (validate/merge/save) and the web client (PUT body) so the
+ * two can't drift. `calibration` and `sharing` nest two levels deep. */
+type ShallowConfigPatch = {
+  [K in keyof Config]?: Config[K] extends object ? Partial<Config[K]> : Config[K];
+};
+export type ConfigPatch = Omit<ShallowConfigPatch, "calibration" | "sharing"> & {
+  calibration?: { board?: Partial<Config["calibration"]["board"]> };
+  sharing?: Partial<Omit<Config["sharing"], "streamable">> & {
+    streamable?: Partial<Config["sharing"]["streamable"]>;
+  };
+};
+
 /** Reference guides over the video frame, as 0..1 fractions (DOM-free so the
  * server can build the same overlay when burning a clip for sharing). */
 export interface OverlayConfig {

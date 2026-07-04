@@ -76,10 +76,13 @@ export class VisitStore {
     return join(this.clipDir, `${id}.mp4`);
   }
 
-  async add(visit: Visit): Promise<void> {
+  /** Add a visit, returning the ids of any visits pruned out (so clients can drop
+   * cards whose clips no longer exist). */
+  async add(visit: Visit): Promise<string[]> {
     this.visits = [visit, ...this.visits.filter((v) => v.id !== visit.id)];
-    await this.prune();
+    const dropped = await this.prune();
     await this.persist();
+    return dropped.map((v) => v.id);
   }
 
   async update(id: string, patch: Partial<Visit>): Promise<Visit | undefined> {
@@ -95,7 +98,7 @@ export class VisitStore {
    * dropped clips. Saved visits form a persistent reference-form library and are
    * never auto-pruned.
    */
-  private async prune(): Promise<void> {
+  private async prune(): Promise<Visit[]> {
     let keptUnsaved = 0;
     const keep: Visit[] = [];
     const dropped: Visit[] = [];
@@ -108,11 +111,12 @@ export class VisitStore {
         dropped.push(v);
       }
     }
-    if (dropped.length === 0) return;
+    if (dropped.length === 0) return [];
     this.visits = keep;
     for (const v of dropped) {
       await unlink(this.clipPath(v.id)).catch(() => {});
     }
+    return dropped;
   }
 }
 

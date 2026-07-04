@@ -2,8 +2,10 @@ import { readFile, writeFile, rename } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, resolve } from "node:path";
-import type { Config } from "@shared/types.js";
+import type { Config, ConfigPatch } from "@shared/types.js";
 import { logger } from "./log.js";
+
+export type { ConfigPatch };
 
 const log = logger("config");
 
@@ -60,18 +62,6 @@ export const DEFAULT_CONFIG: Config = {
     burnCaption: true,
     streamable: { email: "", password: "" },
   },
-};
-
-/** A patch that may override whole sections or individual nested fields. */
-type ShallowPatch = {
-  [K in keyof Config]?: Config[K] extends object ? Partial<Config[K]> : Config[K];
-};
-// calibration and sharing nest two levels, so allow a partial inner object.
-export type ConfigPatch = Omit<ShallowPatch, "calibration" | "sharing"> & {
-  calibration?: { board?: Partial<Config["calibration"]["board"]> };
-  sharing?: Partial<Omit<Config["sharing"], "streamable">> & {
-    streamable?: Partial<Config["sharing"]["streamable"]>;
-  };
 };
 
 /** Merge a partial config over a base, section by section (one level of nesting,

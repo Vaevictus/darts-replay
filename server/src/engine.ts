@@ -173,8 +173,14 @@ export class Engine {
         break;
       }
       case "VISIT_READY": {
-        this.store.add(eff.visit).catch((err) => log.error(`failed to persist visit ${eff.visit.id}:`, err));
         this.broadcast({ type: "visit", visit: eff.visit });
+        this.store
+          .add(eff.visit)
+          .then((removed) => {
+            // Tell clients about clips pruned by this add, so they drop stale cards.
+            if (removed.length) this.broadcast({ type: "visit-removed", ids: removed });
+          })
+          .catch((err) => log.error(`failed to persist visit ${eff.visit.id}:`, err));
         break;
       }
       case "EXTRACT_CLIP": {

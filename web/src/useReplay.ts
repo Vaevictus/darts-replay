@@ -43,6 +43,13 @@ export function useReplay(): ReplayState {
     });
   }, []);
 
+  const remove = useCallback((ids: string[]) => {
+    const gone = new Set(ids);
+    setVisits((prev) => prev.filter((x) => !gone.has(x.id)));
+    // If the clip currently on screen was pruned, stop playing it (it now 404s).
+    setNowPlaying((cur) => (cur && gone.has(cur.id) ? null : cur));
+  }, []);
+
   useEffect(() => {
     let ws: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
@@ -74,6 +81,9 @@ export function useReplay(): ReplayState {
             upsert(msg.visit);
             if (msg.visit.clipUrl) setNowPlaying(msg.visit); // auto-replay
             break;
+          case "visit-removed":
+            remove(msg.ids);
+            break;
           case "play": {
             const v = visitsRef.current.find((x) => x.id === msg.visitId);
             if (v) setNowPlaying(v);
@@ -91,7 +101,7 @@ export function useReplay(): ReplayState {
       if (retry) clearTimeout(retry);
       ws?.close();
     };
-  }, [upsert]);
+  }, [upsert, remove]);
 
   const playVisit = useCallback((v: Visit) => setNowPlaying(v), []);
   const clearPlaying = useCallback(() => setNowPlaying(null), []);

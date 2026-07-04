@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Config, Visit } from "@shared/types.js";
 import type { HeatmapMode, HeatmapScale } from "./Heatmap.js";
 import { usePersistedState } from "./hooks.js";
-import { getConfig, putConfig } from "./api.js";
+import { getConfig, getConfigCached, putConfig } from "./api.js";
 
 const HEAT_MODE_KEY = "darts-replay.heatmapMode";
 const HEAT_SCALE_KEY = "darts-replay.heatmapScale";
@@ -94,12 +94,15 @@ const DEFAULT_BOARD_CAL: Config["calibration"]["board"] = {
  * Returns the value plus a `reload` to refresh it after the Settings screen edits it. */
 export function useBoardCalibration(): [Config["calibration"]["board"], () => void] {
   const [cal, setCal] = useState(DEFAULT_BOARD_CAL);
-  const reload = useCallback(() => {
-    getConfig()
+  // reload (after a Settings save) forces a fresh read; the initial load shares
+  // the cached fetch so it doesn't duplicate useFps's /api/config request.
+  const load = useCallback((fresh: boolean) => {
+    (fresh ? getConfig() : getConfigCached())
       .then((c) => setCal(c.calibration.board))
       .catch(() => {});
   }, []);
-  useEffect(() => reload(), [reload]);
+  const reload = useCallback(() => load(true), [load]);
+  useEffect(() => load(false), [load]);
   return [cal, reload];
 }
 
@@ -119,8 +122,7 @@ export function useSyncOffset() {
 export function useFps(): number {
   const [fps, setFps] = useState(30);
   useEffect(() => {
-    fetch("/api/config")
-      .then((r) => r.json())
+    getConfigCached()
       .then((c) => {
         const f = c?.webcam?.fps;
         if (typeof f === "number" && f > 0) setFps(f);

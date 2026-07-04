@@ -1,6 +1,6 @@
-import type { Camera, Config, OverlayConfig, ShareOptions, ShareResult, Visit } from "@shared/types.js";
+import type { Camera, Config, ConfigPatch, OverlayConfig, ShareOptions, ShareResult, Visit } from "@shared/types.js";
 
-export type { Camera, CameraFormat, CameraSize } from "@shared/types.js";
+export type { Camera, CameraFormat, CameraSize, ConfigPatch } from "@shared/types.js";
 
 export type VisitPatch = Partial<Pick<Visit, "saved" | "rating" | "note">>;
 
@@ -18,15 +18,20 @@ export async function patchVisit(id: string, patch: VisitPatch): Promise<Visit> 
 
 // --- Config / camera setup ----------------------------------------------------
 
-/** A partial config patch — any subset of sections/fields the server recognizes. */
-export type ConfigPatch = {
-  [K in keyof Config]?: Partial<Config[K]>;
-};
-
 export async function getConfig(): Promise<Config> {
   const res = await fetch("/api/config");
   if (!res.ok) throw new Error(`config fetch failed: ${res.status}`);
   return (await res.json()) as Config;
+}
+
+// Dedupe the startup config reads (useFps + useBoardCalibration both want it) by
+// sharing one in-flight/last promise. Invalidated whenever the config is saved.
+let configCache: Promise<Config> | null = null;
+
+/** Config fetch shared across callers that only need a one-time read at startup. */
+export function getConfigCached(): Promise<Config> {
+  if (!configCache) configCache = getConfig().catch((err) => ((configCache = null), Promise.reject(err)));
+  return configCache;
 }
 
 /** Save a config patch. Returns the merged config the server persisted. */
@@ -37,9 +42,10 @@ export async function putConfig(patch: ConfigPatch): Promise<Config> {
     body: JSON.stringify(patch),
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { details?: string[] };
-    throw new Error(body.details?.join("; ") ?? `config save failed: ${res.status}`);
+    const body = (await res.json().catch(() => ({}))) as { error?: string; details?: string[] };
+    throw new Error(body.details?.join("; ") ?? body.error ?? `config save failed: ${res.status}`);
   }
+  configCache = null; // config changed — later cached reads must refetch
   return ((await res.json()) as { config: Config }).config;
 }
 
