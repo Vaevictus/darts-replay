@@ -7,7 +7,7 @@ import type { Config, OverlayConfig, ShareHost, ShareOptions, Visit } from "@sha
 const WS_OPEN = 1; // WebSocket.OPEN
 import { Engine, type ServerMessage } from "./engine.js";
 import { VisitStore, validateVisitPatch } from "./store/visits.js";
-import { resolvePath, saveConfig, validateConfigPatch, WEBCAM_FORMATS, ROTATIONS } from "./config.js";
+import { resolvePath, dataPath, clipsDir, saveConfig, validateConfigPatch, WEBCAM_FORMATS, ROTATIONS } from "./config.js";
 import { listCameras } from "./cameras.js";
 import { shareVisits } from "./share.js";
 import { fetchWithTimeout } from "./fetch.js";
@@ -130,13 +130,13 @@ export async function buildServer({ config, store }: AppDeps): Promise<{
 
   // Clips: served with HTTP range support for <video> seeking.
   void app.register(fastifyStatic, {
-    root: resolvePath(cfg.recorder.clipDir),
+    root: clipsDir(cfg),
     prefix: "/clips/",
     decorateReply: true,
   });
 
   // Exported share files (must exist before fastify-static probes the root).
-  const shareDir = resolvePath("var/share");
+  const shareDir = dataPath("share");
   mkdirSync(shareDir, { recursive: true });
   void app.register(fastifyStatic, { root: shareDir, prefix: "/share/", decorateReply: false });
 

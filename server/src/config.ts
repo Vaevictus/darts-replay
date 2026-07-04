@@ -1,13 +1,26 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import type { Config } from "@shared/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-/** Repo root (server/src/ -> ../../). */
-export const ROOT = resolve(__dirname, "../..");
-const CONFIG_PATH = resolve(ROOT, "config.json");
+
+/**
+ * Install root. Defaults to the repo root (server/src/ -> ../../) so running
+ * from a checkout "just works". Packaged installs (deb, container) may point it
+ * elsewhere via `DARTS_ROOT` (e.g. /opt/darts-replay).
+ */
+export const ROOT = process.env.DARTS_ROOT ? resolve(process.env.DARTS_ROOT) : resolve(__dirname, "../..");
+
+/** Config file location. `DARTS_CONFIG` overrides it (e.g. /etc/darts-replay/config.json). */
+const CONFIG_PATH = process.env.DARTS_CONFIG ? resolve(process.env.DARTS_CONFIG) : resolve(ROOT, "config.json");
+
+/**
+ * Writable data root for clips/share/visits. Defaults to `<ROOT>/var`; packaged
+ * installs point `DARTS_DATA` at a persistent path (e.g. /var/lib/darts-replay).
+ */
+const DATA_ROOT = process.env.DARTS_DATA ? resolve(process.env.DARTS_DATA) : resolve(ROOT, "var");
 
 export const DEFAULT_CONFIG: Config = {
   board: { host: "127.0.0.1", port: 3180, pollIntervalMs: 150 },
@@ -223,7 +236,23 @@ export async function saveConfig(patch: ConfigPatch): Promise<Config> {
   return next;
 }
 
-/** Resolve a possibly-relative config path against the repo root. */
+/** Resolve a possibly-relative path against the install root (for app assets like web/dist). */
 export function resolvePath(p: string): string {
   return resolve(ROOT, p);
+}
+
+/** Resolve a path under the writable data root (clips, share, visits.json). */
+export function dataPath(...segments: string[]): string {
+  return resolve(DATA_ROOT, ...segments);
+}
+
+/**
+ * Absolute clips directory for a given config. Honors an absolute `clipDir`;
+ * otherwise resolves it under the data root, tolerating the legacy `var/`
+ * prefix so existing `config.json` files keep working when `DARTS_DATA` is set.
+ */
+export function clipsDir(cfg: Config): string {
+  const dir = cfg.recorder.clipDir;
+  if (isAbsolute(dir)) return dir;
+  return dataPath(dir.replace(/^var[/\\]/, ""));
 }

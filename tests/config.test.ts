@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { merge, validateConfigPatch, DEFAULT_CONFIG } from "../server/src/config.js";
+import { merge, validateConfigPatch, clipsDir, dataPath, DEFAULT_CONFIG } from "../server/src/config.js";
 
 describe("merge", () => {
   it("overrides a scalar without touching other sections", () => {
@@ -31,6 +31,25 @@ describe("merge", () => {
     expect(out.calibration.board.x).toBe(0.25);
     expect(out.calibration.board.show).toBe(true);
     expect(out.calibration.board.scale).toBe(DEFAULT_CONFIG.calibration.board.scale);
+  });
+});
+
+describe("clipsDir", () => {
+  it("resolves the default 'var/clips' under the data root, stripping the legacy prefix", () => {
+    const dir = clipsDir(DEFAULT_CONFIG);
+    // With DARTS_DATA unset the data root is <ROOT>/var, so both forms land in the same place.
+    expect(dir).toBe(dataPath("clips"));
+    expect(dir.endsWith("/clips")).toBe(true);
+  });
+
+  it("treats a bare relative clipDir as data-root-relative", () => {
+    const cfg = { ...DEFAULT_CONFIG, recorder: { ...DEFAULT_CONFIG.recorder, clipDir: "clips" } };
+    expect(clipsDir(cfg)).toBe(dataPath("clips"));
+  });
+
+  it("passes an absolute clipDir through unchanged", () => {
+    const cfg = { ...DEFAULT_CONFIG, recorder: { ...DEFAULT_CONFIG.recorder, clipDir: "/mnt/clips" } };
+    expect(clipsDir(cfg)).toBe("/mnt/clips");
   });
 });
 

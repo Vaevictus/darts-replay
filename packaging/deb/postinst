@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    # Dedicated system user for the service.
+    if ! getent passwd darts-replay >/dev/null; then
+      adduser --system --group --no-create-home \
+        --home /var/lib/darts-replay darts-replay >/dev/null 2>&1 || \
+      useradd --system --user-group --home-dir /var/lib/darts-replay \
+        --shell /usr/sbin/nologin darts-replay >/dev/null 2>&1 || true
+    fi
+
+    # Camera access.
+    if getent group video >/dev/null; then
+      usermod -aG video darts-replay >/dev/null 2>&1 || true
+    fi
+
+    # Data + config dirs.
+    mkdir -p /var/lib/darts-replay /etc/darts-replay
+    # Seed config on first install; never clobber an edited one (survives upgrades).
+    if [ ! -e /etc/darts-replay/config.json ]; then
+      cp /opt/darts-replay/config.example.json /etc/darts-replay/config.json
+    fi
+    chown -R darts-replay:darts-replay /var/lib/darts-replay /etc/darts-replay
+
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+      systemctl enable darts-replay.service >/dev/null 2>&1 || true
+    fi
+
+    echo ""
+    echo "darts-replay installed. Next:"
+    echo "  1. edit /etc/darts-replay/config.json  (set webcam.device and board.host)"
+    echo "  2. sudo systemctl start darts-replay"
+    echo "  3. open http://localhost:8787"
+    echo ""
+    ;;
+esac
+
+exit 0

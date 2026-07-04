@@ -18,7 +18,7 @@ import { RingBuffer } from "./recorder/ring-buffer.js";
 import { CameraPreview, type WebcamOverride } from "./recorder/preview.js";
 import { extractClip } from "./recorder/extract.js";
 import { VisitStore } from "./store/visits.js";
-import { resolvePath } from "./config.js";
+import { clipsDir } from "./config.js";
 import { logger } from "./log.js";
 
 const log = logger("engine");
@@ -201,7 +201,7 @@ export class Engine {
       await this.ring.waitForWindowFlushed(endMs);
       const segs = this.ring.segmentsForWindow(startMs, endMs);
       const out = this.store.clipPath(visitId);
-      await extractClip(segs, out, resolvePath(this.cfg.recorder.clipDir));
+      await extractClip(segs, out, clipsDir(this.cfg));
       // The clip's t=0 is the first included segment's start, so impacts can be
       // synced to playback time as (dart.at - clipStartMs).
       const updated = await this.store.update(visitId, {

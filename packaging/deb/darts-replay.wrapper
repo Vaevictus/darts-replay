@@ -1,0 +1,13 @@
+#!/bin/sh
+# darts-replay launcher (installed as /usr/bin/darts-replay).
+# Runs the server from its bundled Node runtime; FHS paths are set here so the
+# app writes config to /etc and data to /var/lib regardless of the caller's cwd.
+set -e
+export NODE_ENV="${NODE_ENV:-production}"
+export DARTS_ROOT="${DARTS_ROOT:-/opt/darts-replay}"
+export DARTS_CONFIG="${DARTS_CONFIG:-/etc/darts-replay/config.json}"
+export DARTS_DATA="${DARTS_DATA:-/var/lib/darts-replay}"
+cd "$DARTS_ROOT"
+exec "$DARTS_ROOT/runtime/bin/node" \
+     "$DARTS_ROOT/node_modules/tsx/dist/cli.mjs" \
+     "$DARTS_ROOT/server/src/index.ts" "$@"

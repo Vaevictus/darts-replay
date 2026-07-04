@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  remove|deconfigure|upgrade)
+    if [ -d /run/systemd/system ]; then
+      systemctl stop darts-replay.service >/dev/null 2>&1 || true
+      # Leave it enabled across upgrades; only disable on real removal.
+      if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+        systemctl disable darts-replay.service >/dev/null 2>&1 || true
+      fi
+    fi
+    ;;
+esac
+
+exit 0

@@ -1,0 +1,13 @@
+node_modules
+web/dist
+var
+config.json
+.git
+.github
+docs
+tests
+packaging
+deploy
+*.log
+.DS_Store
+scratchpad

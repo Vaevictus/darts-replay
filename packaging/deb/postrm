@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+if [ -d /run/systemd/system ]; then
+  systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+case "$1" in
+  purge)
+    # Remove config, recorded clips and the service user on purge only.
+    rm -rf /etc/darts-replay /var/lib/darts-replay
+    if getent passwd darts-replay >/dev/null; then
+      deluser --system darts-replay >/dev/null 2>&1 || \
+      userdel darts-replay >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+
+exit 0

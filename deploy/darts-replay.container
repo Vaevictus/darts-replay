@@ -1,0 +1,43 @@
+# Quadlet unit for rootless podman + user systemd.
+#
+# Install:
+#   mkdir -p ~/.config/containers/systemd
+#   cp deploy/darts-replay.container ~/.config/containers/systemd/
+#   # edit AddDevice= to match your camera, then:
+#   systemctl --user daemon-reload
+#   systemctl --user start darts-replay
+#   loginctl enable-linger "$USER"        # keep it running after you log out
+#
+# Quadlet turns this file into a systemd user service named darts-replay.service.
+# Config + data persist under ~/.config/darts-replay and ~/.local/share/darts-replay.
+
+[Unit]
+Description=darts-replay (instant replay for autodarts)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/vaevictus/darts-replay:latest
+AutoUpdate=registry
+
+# Appliance networking: reach the Board Manager on localhost:3180 and bind the LAN port.
+Network=host
+
+# Your SPARE webcam's capture node — change to match your box (v4l2-ctl --list-devices).
+AddDevice=/dev/video6
+
+# Rootless device access: keep your host `video` group inside the container.
+GroupAdd=keep-groups
+
+# The tmpfs ring buffer lives in /dev/shm; the 64m default is too small.
+ShmSize=256m
+
+Volume=%h/.config/darts-replay:/config:Z
+Volume=%h/.local/share/darts-replay:/data:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=90
+
+[Install]
+WantedBy=default.target

@@ -1,4 +1,4 @@
-import { loadConfig, resolvePath } from "./config.js";
+import { loadConfig, dataPath, clipsDir } from "./config.js";
 import { VisitStore } from "./store/visits.js";
 import { buildServer } from "./server.js";
 import { preflight } from "./preflight.js";
@@ -10,7 +10,7 @@ async function main() {
   const config = await loadConfig();
   preflight(config);
 
-  const store = new VisitStore(resolvePath("var"), resolvePath(config.recorder.clipDir), config.retainCount);
+  const store = new VisitStore(dataPath(), clipsDir(config), config.retainCount);
   const { app, engine } = await buildServer({ config, store });
 
   engine.start();

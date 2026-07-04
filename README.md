@@ -41,16 +41,37 @@ and per-dart segment + normalized coordinates). darts-replay polls it (~150 ms; 
 websocket), runs the snapshots through a small visit state machine, and asks the recorder for a clip
 when the visit ends. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
+## Install
+
+Three ways to install — see **[INSTALL.md](INSTALL.md)** for the full details.
+
+- **`.deb` (Debian/Ubuntu)** — self-contained (bundles Node; only needs `ffmpeg`), installs a
+  system service. Grab it from the [latest release](https://github.com/Vaevictus/darts-replay/releases/latest):
+  ```sh
+  sudo apt install ./darts-replay_<version>_amd64.deb
+  sudoedit /etc/darts-replay/config.json && sudo systemctl start darts-replay
+  ```
+- **Container (rootless podman)** — multi-arch image on `ghcr.io/vaevictus/darts-replay`, driven by
+  [`docker-compose.yml`](docker-compose.yml); auto-start as a `--user` service via
+  [deploy/README.md](deploy/README.md):
+  ```sh
+  mkdir -p config data && cp config.example.json config/config.json   # then edit
+  podman compose up -d          # open http://localhost:8787
+  ```
+- **From source** — see [Develop](#develop) below.
+
+Every method needs a **spare V4L2 webcam** and the Autodarts **Board Manager** on `:3180`.
+
 ## Requirements
 
 - **Linux** x86_64 / arm64 (V4L2, `/dev/shm`).
-- **Node.js ≥ 20** and **`ffmpeg`** on `PATH`.
+- **Node.js ≥ 20** and **`ffmpeg`** on `PATH` (the `.deb` and container bundle these for you).
 - A running **Autodarts Board Manager** reachable on `:3180` (default: localhost).
 - A **spare V4L2 webcam** *separate from the cameras Autodarts uses for detection* — V4L2 capture
   devices can't be shared between two processes. MJPEG-capable is ideal. Find yours with
   `v4l2-ctl --list-devices`.
 
-## Quick start
+## Develop
 
 ```sh
 git clone https://github.com/Vaevictus/darts-replay.git

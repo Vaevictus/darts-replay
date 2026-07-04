@@ -1,0 +1,44 @@
+# darts-replay — rootless podman / docker compose.
+#
+#   podman compose up -d        (or: docker compose up -d)
+#
+# Quick start:
+#   1. mkdir -p config data && cp config.example.json config/config.json
+#   2. edit config/config.json  ->  webcam.device + board.host for your setup
+#   3. set `devices:` below to YOUR camera node (v4l2-ctl --list-devices)
+#   4. podman compose up -d   &&   open http://localhost:8787
+#
+# For an auto-starting user-level service, see deploy/README.md (Quadlet is the
+# tidiest route on rootless podman + systemd).
+
+services:
+  darts-replay:
+    # Uses the published image if present, otherwise builds from this checkout.
+    image: ghcr.io/vaevictus/darts-replay:latest
+    build: .
+    container_name: darts-replay
+
+    # Host networking: the app polls the Autodarts Board Manager on localhost:3180
+    # and binds its own port on the LAN. Simplest and most robust for an appliance
+    # on one box. (Drop this and use `ports:` below if you must isolate the net.)
+    network_mode: host
+    # ports:
+    #   - "8787:8787"   # only if NOT using network_mode: host
+
+    # Your SPARE webcam's capture node — change to match your box.
+    devices:
+      - /dev/video6:/dev/video6
+    # Rootless device access: you must be in the host `video` group. Passing the
+    # group through keeps your video membership inside the container.
+    group_add:
+      - keep-groups
+
+    # The tmpfs ring buffer lives in /dev/shm; the default 64m is too small.
+    shm_size: "256m"
+
+    volumes:
+      - ./config:/config        # put config.json here (DARTS_CONFIG=/config/config.json)
+      - ./data:/data            # clips, share exports, visits.json (DARTS_DATA=/data)
+      # On SELinux hosts (Fedora/RHEL) append :z to each mount above.
+
+    restart: unless-stopped

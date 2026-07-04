@@ -1,0 +1,28 @@
+# User-level systemd unit that runs the docker-compose stack via podman.
+# An alternative to the Quadlet unit (deploy/darts-replay.container) for people
+# who prefer to manage everything through docker-compose.yml.
+#
+# Install (from a checkout that contains docker-compose.yml):
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/darts-replay-compose.service ~/.config/systemd/user/darts-replay.service
+#   # edit WorkingDirectory below to your checkout path, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now darts-replay
+#   loginctl enable-linger "$USER"
+
+[Unit]
+Description=darts-replay (podman compose)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Absolute path to the directory holding docker-compose.yml:
+WorkingDirectory=%h/darts-replay
+ExecStart=/usr/bin/podman compose up
+ExecStop=/usr/bin/podman compose down
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

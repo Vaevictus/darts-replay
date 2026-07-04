@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-04
+
+### Added
+- **Install options** — three first-class ways to install (see [INSTALL.md](INSTALL.md)):
+  a self-contained **`.deb`** for Debian/Ubuntu (bundles a Node runtime, `Depends: ffmpeg`,
+  installs a hardened system service under a dedicated `darts-replay` user, FHS layout under
+  `/opt`, `/etc/darts-replay`, `/var/lib/darts-replay`); a multi-arch **container image** on
+  GHCR driven by [`docker-compose.yml`](docker-compose.yml) for **rootless podman**, with a
+  **Quadlet** unit + compose-wrapped unit for a user-level `systemctl --user` service
+  ([deploy/README.md](deploy/README.md)); and the existing from-source path. A `release.yml`
+  workflow builds and publishes the image and per-arch `.deb`s on each `v*` tag.
+- **`DARTS_ROOT` / `DARTS_CONFIG` / `DARTS_DATA`** env overrides so the install dir, config file
+  and writable data root can be relocated independently (used by the deb/container). Fully
+  back-compatible with the in-repo `config.json` + `var/` layout.
+
+### Changed
+- `tsx` moved to runtime dependencies (the server runs its TypeScript directly), so
+  `npm ci --omit=dev` and packaged installs can launch without the dev toolchain.
+
 ### Added
 - **Clip sharing** — select one or more clips (📤 on a card) and export a re-encoded
   H.264 MP4 with the overlays **burned in**: the calibrated board (optionally with the
@@ -60,5 +79,6 @@ Initial release.
 - REST + WebSocket API, configurable via `config.json`.
 - Startup preflight checks (platform, ffmpeg, camera) and a leveled logger.
 
-[Unreleased]: https://github.com/Vaevictus/darts-replay/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Vaevictus/darts-replay/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Vaevictus/darts-replay/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Vaevictus/darts-replay/releases/tag/v0.1.0

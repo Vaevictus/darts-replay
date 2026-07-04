@@ -1,0 +1,32 @@
+[Unit]
+Description=darts-replay (instant replay for autodarts)
+Documentation=https://github.com/Vaevictus/darts-replay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=darts-replay
+Group=darts-replay
+# Camera access (V4L2 capture node is root:video).
+SupplementaryGroups=video
+ExecStart=/usr/bin/darts-replay
+Restart=always
+RestartSec=3
+
+# systemd creates/owns the data dir for us.
+StateDirectory=darts-replay
+Environment=NODE_ENV=production
+Environment=DARTS_ROOT=/opt/darts-replay
+Environment=DARTS_CONFIG=/etc/darts-replay/config.json
+Environment=DARTS_DATA=/var/lib/darts-replay
+
+# Hardening: the app only writes its config and data dirs; /opt stays read-only.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/darts-replay /var/lib/darts-replay
+
+[Install]
+WantedBy=multi-user.target
