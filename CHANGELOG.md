@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-04
+
 ### Fixed
 - **`.deb` upgrades really do restart the service now.** The previous attempt was a
   no-op: `prerm` stopped the service on upgrade, so `postinst`'s `try-restart` found
@@ -140,7 +142,8 @@ Initial release.
 - REST + WebSocket API, configurable via `config.json`.
 - Startup preflight checks (platform, ffmpeg, camera) and a leveled logger.
 
-[Unreleased]: https://github.com/Vaevictus/darts-replay/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Vaevictus/darts-replay/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/Vaevictus/darts-replay/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Vaevictus/darts-replay/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Vaevictus/darts-replay/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Vaevictus/darts-replay/releases/tag/v0.1.0

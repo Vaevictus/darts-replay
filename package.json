@@ -1,6 +1,6 @@
 {
   "name": "darts-replay",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Instant-replay system for an Autodarts board: records each visit on a spare webcam, auto-plays it, and pairs it with an SVG of what was hit.",
