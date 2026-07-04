@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Heatmap resolution & hotness.** The per-dart kernel was ~0.20 board-radii
+  (≈33 mm), so darts anywhere in the same segment merged into a hot blob. Shrunk
+  it ~3× (≈12 mm, roughly one dart-width) so a spot only heats up when hits land
+  practically on top of each other, and made the default intensity scale
+  **absolute** (a spot goes red on real pile-up, ~4 stacked darts) instead of
+  relative (which always painted the densest cluster red regardless of tightness).
+
 ## [0.2.2] - 2026-07-04
 
 ### Fixed

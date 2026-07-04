@@ -15,10 +15,12 @@ export function useHeatmapMode() {
   );
 }
 
-/** Heatmap intensity scale (relative-to-densest vs absolute), persisted. */
+/** Heatmap intensity scale (relative-to-densest vs absolute), persisted. Defaults
+ * to "absolute" so a spot only reads hot when darts actually pile up on it, rather
+ * than "relative" always painting your densest cluster red regardless of tightness. */
 export function useHeatmapScale() {
-  return usePersistedState<HeatmapScale>(HEAT_SCALE_KEY, "relative", (raw) =>
-    raw === "relative" || raw === "absolute" ? raw : "relative",
+  return usePersistedState<HeatmapScale>(HEAT_SCALE_KEY, "absolute", (raw) =>
+    raw === "relative" || raw === "absolute" ? raw : "absolute",
   );
 }
 

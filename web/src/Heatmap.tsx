@@ -7,8 +7,14 @@ export type HeatmapMode = "glow" | "ramp";
 // pile up in one spot.
 export type HeatmapScale = "relative" | "absolute";
 
-// Accumulated alpha (~6 overlapping darts) that reads as full red in absolute mode.
-const ABSOLUTE_REF = 200;
+// Accumulated alpha (~4 overlapping darts) that reads as full red in absolute mode.
+const ABSOLUTE_REF = 160;
+
+// Per-dart kernel radius as a fraction of the canvas. Kept small on purpose:
+// blob_board_radius = BLOB_FRAC * 2.3 ≈ 0.069 (≈ 12 mm on a real board), so a
+// dart's heat is roughly one dart-width — hits must be practically on top of
+// each other to build a hot spot, rather than "anywhere in the same segment".
+const BLOB_FRAC = 0.03;
 
 interface Pt {
   x: number;
@@ -46,7 +52,7 @@ function palette(): Uint8ClampedArray {
 export function Heatmap({
   coords,
   mode = "ramp",
-  scale = "relative",
+  scale = "absolute",
   size = 200,
 }: {
   coords: Pt[];
@@ -70,7 +76,7 @@ export function Heatmap({
     const R = px / 2 / 1.15; // margin so out-board darts still land inside
     const toX = (x: number) => c + x * R;
     const toY = (y: number) => c - y * R; // math y-up -> screen y-down
-    const blob = px * 0.085;
+    const blob = px * BLOB_FRAC;
 
     ctx.clearRect(0, 0, px, px);
 
