@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`.deb` upgrades really do restart the service now.** The previous attempt was a
+  no-op: `prerm` stopped the service on upgrade, so `postinst`'s `try-restart` found
+  nothing running. `prerm` no longer stops on upgrade, and `postinst` `restart`s the
+  service if it's enabled — so the recorder comes back on the new code (a user who
+  `systemctl disable`d it is left alone). Verified with a mock-`systemctl` trace.
+- Runtime `recorder.clipDir` changes (via Settings) no longer break clip extraction:
+  `extractClip` ensures the clips dir exists before writing (closes the last of the
+  C1 family for hot config edits).
+- Clip-share uploads now time out across the whole request (`AbortSignal.timeout`),
+  not just the response headers — a slow-drip upload body can't wedge the serialized
+  `/api/share` job past the deadline.
+- The web config cache is invalidated on a WS `config` broadcast, so a component that
+  mounts after another client changed the config no longer reads a stale value.
 - Clients now drop a visit card the moment its clip is pruned (a `visit-removed`
   WS frame), instead of leaving a card whose `/clips/…` 404s until reload; the
   player also stops if the clip it was showing is pruned.

@@ -1,7 +1,7 @@
 // Build a per-visit MP4 by stream-copying the ring segments that overlap the
 // visit window. No re-encode -> fast ("instant") finalize.
 
-import { writeFile, unlink } from "node:fs/promises";
+import { writeFile, unlink, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { SegmentWindow } from "./ring-buffer.js";
 import { runFfmpeg } from "../ffmpeg.js";
@@ -19,6 +19,9 @@ export async function extractClip(
 ): Promise<string> {
   if (segments.length === 0) throw new ExtractError("no segments overlap the visit window");
 
+  // Ensure the clips dir exists — it may have changed at runtime (Settings edit)
+  // to a dir the store didn't create at boot, which would ENOENT the list write.
+  await mkdir(clipDir, { recursive: true });
   const listPath = join(clipDir, `${Date.now()}-${Math.floor(performance.now())}.concat.txt`);
   const list = segments.map((s) => `file '${s.path.replace(/'/g, "'\\''")}'`).join("\n") + "\n";
   await writeFile(listPath, list, "utf8");

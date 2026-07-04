@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Visit, Dart } from "@shared/types.js";
 import type { ServerMessage } from "@shared/messages.js";
+import { invalidateConfigCache } from "./api.js";
 
 export interface Status {
   phase: string;
@@ -90,6 +91,8 @@ export function useReplay(): ReplayState {
             break;
           }
           case "config":
+            // Another client changed the config — drop the cache so later reads refetch.
+            invalidateConfigCache();
             break;
         }
       };

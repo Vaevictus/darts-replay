@@ -27,11 +27,13 @@ case "$1" in
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload >/dev/null 2>&1 || true
       systemctl enable darts-replay.service >/dev/null 2>&1 || true
-      # On upgrade ($2 = previously-configured version) restart to load new code.
-      # try-restart only acts if it's already running, so a first install (or a
-      # service the user deliberately stopped) is left alone.
-      if [ -n "$2" ]; then
-        systemctl try-restart darts-replay.service >/dev/null 2>&1 || true
+      # On upgrade ($2 = previously-configured version) bring the recorder back on
+      # the new code. We restart (not try-restart) because an OLD package's prerm
+      # may have stopped it — but only if it's enabled, so a user who deliberately
+      # `systemctl disable`d it is left alone. First install ($2 empty) never
+      # auto-starts: the user must set webcam.device/board.host first.
+      if [ -n "$2" ] && systemctl is-enabled --quiet darts-replay.service 2>/dev/null; then
+        systemctl restart darts-replay.service >/dev/null 2>&1 || true
       fi
     fi
 

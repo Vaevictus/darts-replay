@@ -10,7 +10,6 @@ import { join, basename } from "node:path";
 import { buildBoardSvg } from "@shared/dartboard.js";
 import type { Config, OverlayConfig, ShareOptions, ShareResult, ShareLink, Visit } from "@shared/types.js";
 import { runFfmpeg, probeDims } from "./ffmpeg.js";
-import { fetchWithTimeout } from "./fetch.js";
 import { logger } from "./log.js";
 
 const log = logger("share");
@@ -18,6 +17,9 @@ type BoardCal = Config["calibration"]["board"];
 
 // Uploads can be large on a slow uplink; generous ceiling so a wedged upload
 // can't hang the /api/share request (and the UI's "Encoding…" state) forever.
+// AbortSignal.timeout stays armed through the body read (unlike a header-only
+// timeout), so a slow-drip response can't outlast the deadline while the
+// serialized /api/share job holds everyone else off.
 const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 const GUIDE_COLOR = "#2bd576"; // overlay accent green
@@ -122,7 +124,11 @@ async function uploadCatbox(path: string): Promise<string> {
   const fd = new FormData();
   fd.append("reqtype", "fileupload");
   fd.append("fileToUpload", new Blob([await readFile(path)], { type: "video/mp4" }), basename(path));
-  const res = await fetchWithTimeout("https://catbox.moe/user/api.php", UPLOAD_TIMEOUT_MS, { method: "POST", body: fd });
+  const res = await fetch("https://catbox.moe/user/api.php", {
+    method: "POST",
+    body: fd,
+    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+  });
   const text = (await res.text()).trim();
   if (!res.ok || !/^https?:\/\//.test(text)) throw new Error(`catbox failed: ${text.slice(0, 200) || res.status}`);
   return text;
@@ -133,10 +139,11 @@ async function uploadStreamable(path: string, creds: { email: string; password: 
   const fd = new FormData();
   fd.append("file", new Blob([await readFile(path)], { type: "video/mp4" }), basename(path));
   const auth = Buffer.from(`${creds.email}:${creds.password}`).toString("base64");
-  const res = await fetchWithTimeout("https://api.streamable.com/upload", UPLOAD_TIMEOUT_MS, {
+  const res = await fetch("https://api.streamable.com/upload", {
     method: "POST",
     headers: { Authorization: `Basic ${auth}`, "User-Agent": "darts-replay" },
     body: fd,
+    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
   });
   const body = (await res.json().catch(() => ({}))) as { shortcode?: string; error?: string };
   if (!res.ok || !body.shortcode) throw new Error(`Streamable failed: ${body.error ?? res.status}`);

@@ -2,13 +2,14 @@
 set -e
 
 case "$1" in
-  remove|deconfigure|upgrade)
+  remove|deconfigure)
+    # On real removal, stop + disable. Deliberately do NOTHING on `upgrade`:
+    # stopping here would leave the service down (the new postinst's restart only
+    # runs if it's still enabled). Leaving it running lets postinst restart it
+    # into the new code, and preserves a user's "stopped" state across upgrades.
     if [ -d /run/systemd/system ]; then
       systemctl stop darts-replay.service >/dev/null 2>&1 || true
-      # Leave it enabled across upgrades; only disable on real removal.
-      if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
-        systemctl disable darts-replay.service >/dev/null 2>&1 || true
-      fi
+      systemctl disable darts-replay.service >/dev/null 2>&1 || true
     fi
     ;;
 esac

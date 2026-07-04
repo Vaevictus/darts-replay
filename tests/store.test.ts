@@ -65,6 +65,17 @@ describe("VisitStore", () => {
     expect(b.get(visit(7).id)?.seq).toBe(7);
   });
 
+  it("add() returns the ids pruned by that add (drives the visit-removed WS frame)", async () => {
+    const store = new VisitStore(varDir, clipDir, 2);
+    for (const n of [1, 2]) {
+      writeFileSync(store.clipPath(visit(n).id), "x");
+      expect(await store.add(visit(n))).toEqual([]); // nothing pruned yet
+    }
+    writeFileSync(store.clipPath(visit(3).id), "x");
+    const removed = await store.add(visit(3)); // retain=2 ⇒ oldest unsaved (1) drops
+    expect(removed).toEqual([visit(1).id]);
+  });
+
   it("reports the max persisted seq (to seed the FSM counter across restarts)", async () => {
     const store = new VisitStore(varDir, clipDir, 10);
     expect(store.maxSeq()).toBe(0);

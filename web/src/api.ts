@@ -34,6 +34,12 @@ export function getConfigCached(): Promise<Config> {
   return configCache;
 }
 
+/** Drop the cached config so the next read refetches (e.g. after a WS `config`
+ * broadcast from another client changed it). */
+export function invalidateConfigCache(): void {
+  configCache = null;
+}
+
 /** Save a config patch. Returns the merged config the server persisted. */
 export async function putConfig(patch: ConfigPatch): Promise<Config> {
   const res = await fetch("/api/config", {
